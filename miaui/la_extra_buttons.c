@@ -1,36 +1,47 @@
-/* Extra item buttons for Link's Awakening DX on MiaUI: X, Y, L and R.
+/* Switch-style controls for Link's Awakening DX on MiaUI.
  *
- * Assign: open the inventory (Start), put the cursor on an item and press
- *         X, Y, L or R. Pressing it on an empty cell clears that button.
- * Use:    press the button in the world. It works like a third/fourth/...
- *         item slot: the item is used for real, at the same time as A and B
- *         (shield on L held + sword on B works).
+ *   B        sword (fixed)            R / R2   shield, while held
+ *   A        talk, read, lift, pull   L / L2   Pegasus Boots, while held
+ *            (Power Bracelet, fixed)
+ *   X / Y    the two item slots of the original (A and B on the GBC)
  *
- * How: the game handles item buttons in one routine, CheckItemsToUse
- * (ROM0 $1173 in Rev 2; $1177 in zladx/LADX-Disassembly). For each slot it
- * runs boots/shield while held, UseItem on a new press and the "held" handler
- * (sword charge, bracelet). It only knows slots A and B, so after the game's
- * own call we run the routine once more per active extra button, with, for
- * that pass only, B = the extra item, A = empty and the B bits of
- * hPressedButtonsMask/hJoypadState = that button's state. Everything is put
- * back before the routine returns to its caller, so nothing else in the game
- * ever sees the change and the save can't be affected.
+ * How: the game keeps two button slots, wInventoryItems B ($DB00) and A
+ * ($DB01), and many places check them directly (CheckItemsToUse, but also
+ * ~26 liftable objects that look for the Power Bracelet in a slot together
+ * with the matching button). So in the world the real slots hold the sword
+ * (B) and the bracelet (A) and the game handles B and A exactly as it always
+ * did. The X and Y items stay in the subscreen cells and are used through
+ * extra runs of CheckItemsToUse (ROM0 $1173 in Rev 2) with, for that run
+ * only, B = the item and the B button = X/Y's state; same for the shield
+ * (R/R2) and the boots (L/L2). Everything is put back before the routine
+ * returns, so the rest of the game never sees it.
  *
- * The passes are chained through the trampoline dispatcher in the generated
- * rom.c (scripts/build_miaui.sh adds one line there that calls
- * la_xbtn_dispatch for $1173 and for our private return address).
- *
- * The assignments are saved to $LA_SAVE_DIR/extra_buttons.cfg.
+ * Two slot layouts, chosen from wGameplayType every frame:
+ *   world      $DB00 = sword, $DB01 = bracelet (0 when not owned yet). The
+ *              save is always written in this layout.
+ *   inventory  $DB01 = X item, $DB00 = Y item, so the game's own subscreen
+ *              equips them (X acts as its A, Y as its B), with its sounds,
+ *              counts and the ocarina song menu. A and B do nothing there,
+ *              and the fixed items (sword, shield, bracelet, boots) can't be
+ *              equipped: their icons are just shown.
+ * Switching is only swaps between a slot and a cell, so no item is ever
+ * created or lost. In the world the status bar is drawn by the game's own
+ * DrawInventorySlots, which we run with the X/Y items in the slots for the
+ * duration of the call; la_overlay.c relabels its B/A as Y/X.
+ * X/Y are remembered per save file in $LA_SAVE_DIR/xy_slot<n>.cfg.
  *
  * Also here, because they use the same dispatcher hooks:
  *  - Quieter dialogs: "You got a Piece of Power!" and "You've got a Guardian
  *    Acorn!" show the first time only, and "This looks pretty heavy" (rock,
- *    Power Bracelet not on A/B) shows once, and never while the bracelet is on
- *    X/Y/L/R (the game only checks A and B). What was already shown is kept in
- *    $DB59, the unused third byte of the death counter, inside the save data,
- *    so it follows each save file (and is reverted by quitting without saving).
+ *    no Power Bracelet in a slot) shows once. What was already shown is kept
+ *    in $DB59, the unused third byte of the death counter, inside the save
+ *    data, so it follows each save file.
  *  - MENU: in the world it holds A+B+Start+Select for a few frames, which
  *    opens the game's own save screen; on the title and file screens it quits.
+ *
+ * The routines are reached through the trampoline dispatcher in the
+ * generated rom.c (scripts/build_miaui.sh adds one line there that calls
+ * la_hook_dispatch for the addresses set in la_hook_map).
  */
 #include "gbrt.h"
 #include "la_extra_buttons.h"
@@ -39,9 +50,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ROM */
-#define CHECK_ITEMS_TO_USE  0x1173          /* Rev 2 */
+/* ROM (Rev 2) */
+#define CHECK_ITEMS_TO_USE  0x1173          /* $1177 in zladx/LADX-Disassembly */
+#define DRAW_INV_SLOTS      0x5CA8          /* bank $20: DrawInventorySlots */
+#define DRAW_INV_SLOTS_BANK 0x20
 #define XBTN_RETURN         0xFEED          /* unusable memory: never real code */
+#define DRAW_RETURN         0xFEEE
 #define OPEN_DIALOG_TBL0    0x237C          /* OpenDialogInTable0 (a = dialog index) */
 #define GOT_ITEM_DIALOG_RET 0x105B          /* return address of its call in ApplyGotItem */
 #define OPEN_DIALOG_CLR     0x7543          /* bank 2: OpenDialogInTable0AndClearIncrement */
@@ -50,76 +64,70 @@
 #define DIALOG_ACORN          0xEC
 #define DIALOG_HEAVY_ROCK     0x8D
 
-#define W_SEEN_DIALOGS     0xDB59  /* wDeathCount+2: saved, never used by the game */
-#define SEEN_POWER  0x01
-#define SEEN_ACORN  0x02
-#define SEEN_ROCK   0x04
-#define INV_POWER_BRACELET 0x03
-
 /* WRAM ($Dxxx lives in bank 1 during gameplay) */
 #define W_INV_B            0xDB00  /* wInventoryItems: B, A, then the 10 subscreen cells */
 #define W_INV_A            0xDB01
+#define W_INV_CELLS        0xDB02
+#define INV_CELLS          10
 #define INV_SLOTS          12
 #define W_INV_SELECTION    0xDBA3
+#define W_SAVE_SLOT        0xDBA6
 #define W_GAMEPLAY_TYPE    0xDB95
-#define W_GAMEPLAY_SUBTYPE 0xDB96
 #define W_HAS_MIRROR_SHIELD 0xC15A
 #define W_USING_SHIELD     0xC15B
 #define W_FREE_MOVEMENT    0xC17B  /* non-zero makes the Color Dungeon floor helper return */
 #define H_PRESSED_MASK     0xFFCB  /* held */
 #define H_JOYPAD_STATE     0xFFCC  /* new presses this frame */
-#define H_JINGLE           0xFFF2
+#define W_SEEN_DIALOGS     0xDB59  /* wDeathCount+2: saved, never used by the game */
+#define SEEN_POWER  0x01
+#define SEEN_ACORN  0x02
+#define SEEN_ROCK   0x04
 
 #define J_A 0x10
 #define J_B 0x20
 
+#define GAMEPLAY_FILE_SCREENS_END 0x05     /* intro/title, credits, file select/new/delete/copy */
+#define GAMEPLAY_FILE_SAVE    0x06         /* from here on a save file is loaded */
 #define GAMEPLAY_WORLD        0x0B
 #define GAMEPLAY_INVENTORY    0x0C
-#define INVENTORY_INTERACTIVE 0x08
-#define JINGLE_VALIDATE       0x13
 
-static const SDL_GameControllerButton k_pad[XB_COUNT] = {
-    SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y,
-    SDL_CONTROLLER_BUTTON_LEFTSHOULDER, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
-};
-static const char* const k_name[XB_COUNT] = { "X", "Y", "L", "R" };
+/* Items */
+#define INV_SWORD          0x01
+#define INV_POWER_BRACELET 0x03
+#define INV_SHIELD         0x04
+#define INV_PEGASUS_BOOTS  0x08
+#define INV_MAGIC_POWDER   0x0C
+#define W_POWDER_COUNT     0xDB4C  /* BCD */
 
-static uint8_t s_item[XB_COUNT];   /* assigned item ID, 0 = none */
-static bool    s_loaded;
+/* Pad, logical: the two item slots and the two fixed held items */
+enum { PB_X, PB_Y, PB_SHIELD, PB_BOOTS, PB_COUNT };
+
 static int     s_enabled = -1;     /* -1 = not checked yet */
-static bool    s_held[XB_COUNT];   /* sampled once per host frame */
-static bool    s_held_prev[XB_COUNT]; /* as of the last real CheckItemsToUse */
-static bool    s_inv_prev[XB_COUNT];  /* edge detection in the inventory */
+static uint8_t s_xy[2];            /* X and Y items, 0 = none */
+static int     s_cfg_slot = -1;    /* save slot s_xy belongs to */
+static bool    s_menu_layout;      /* slots currently in the inventory layout */
+static bool    s_held[PB_COUNT];   /* sampled once per host frame */
+static bool    s_held_prev[PB_COUNT]; /* as of the last real CheckItemsToUse */
 
 /* Chained passes */
 static bool     s_chain;
 static uint16_t s_ret;                     /* the real caller's return address */
 static int      s_pass;                    /* index into s_todo; -1 = the game's own pass */
-static int      s_todo_n, s_todo[XB_COUNT];
-static bool     s_todo_edge[XB_COUNT];
+static int      s_todo_n;
+static uint8_t  s_todo_item[PB_COUNT];
+static bool     s_todo_edge[PB_COUNT];
 static uint8_t  s_sv_b, s_sv_a, s_sv_mask, s_sv_joy, s_sv_free, s_sv_shield, s_sv_mirror;
+
+/* DrawInventorySlots with the X/Y items shown */
+static bool     s_draw_active;
+static uint16_t s_draw_ret;
+static uint8_t  s_draw_b, s_draw_a;
 
 static uint8_t* wram(GBContext* c, uint16_t a) {
     return a < 0xD000 ? &c->wram[a - 0xC000] : &c->wram[0x1000 + (a - 0xD000)];
 }
 static uint8_t rd(GBContext* c, uint16_t a) { return *wram(c, a); }
 static void    wr(GBContext* c, uint16_t a, uint8_t v) { *wram(c, a) = v; }
-
-static void cfg_path(char* buf, size_t n) {
-    const char* d = getenv("LA_SAVE_DIR");
-    snprintf(buf, n, "%s/extra_buttons.cfg", (d && *d) ? d : ".");
-}
-static void cfg_load(void) {
-    char p[600]; cfg_path(p, sizeof p);
-    FILE* f = fopen(p, "rb");
-    if (f) { if (fread(s_item, 1, XB_COUNT, f) != XB_COUNT) memset(s_item, 0, sizeof s_item); fclose(f); }
-    fprintf(stderr, "[XBTN] loaded: X=%02X Y=%02X L=%02X R=%02X\n", s_item[0], s_item[1], s_item[2], s_item[3]);
-}
-static void cfg_save(void) {
-    char p[600]; cfg_path(p, sizeof p);
-    FILE* f = fopen(p, "wb");
-    if (f) { fwrite(s_item, 1, XB_COUNT, f); fclose(f); }
-}
 
 uint8_t la_hook_map[0x10000 / 8];
 static void hook(uint16_t a) { la_hook_map[a >> 3] |= (uint8_t)(1u << (a & 7)); }
@@ -128,19 +136,55 @@ static uint16_t stack16(GBContext* c, int off) {
     uint16_t sp = (uint16_t)(c->sp + off);
     return (uint16_t)(gb_read8(c, sp) | (gb_read8(c, (uint16_t)(sp + 1)) << 8));
 }
+static void set_stack16(GBContext* c, int off, uint16_t v) {
+    uint16_t sp = (uint16_t)(c->sp + off);
+    gb_write8(c, sp, v & 0xFF);
+    gb_write8(c, (uint16_t)(sp + 1), v >> 8);
+}
 /* Skip the routine being entered: behave as its `ret`. */
 static void skip_routine(GBContext* c) {
     c->pc = stack16(c, 0);
     c->sp = (uint16_t)(c->sp + 2);
 }
 
-/* Only hook the ROM we know: CheckItemsToUse starts with ld a,[wBlockItemUsage]. */
+/* ---- per-save X/Y ------------------------------------------------------- */
+static void cfg_path(char* buf, size_t n, int slot) {
+    const char* d = getenv("LA_SAVE_DIR");
+    snprintf(buf, n, "%s/xy_slot%d.cfg", (d && *d) ? d : ".", slot);
+}
+static void cfg_load(int slot) {
+    char p[600]; cfg_path(p, sizeof p, slot);
+    memset(s_xy, 0, sizeof s_xy);
+    FILE* f = fopen(p, "rb");
+    if (f) { if (fread(s_xy, 1, 2, f) != 2) memset(s_xy, 0, sizeof s_xy); fclose(f); }
+    s_cfg_slot = slot;
+    fprintf(stderr, "[XBTN] save %d: X=%02X Y=%02X\n", slot, s_xy[0], s_xy[1]);
+}
+static void cfg_save(void) {
+    if (s_cfg_slot < 0) return;
+    char p[600]; cfg_path(p, sizeof p, s_cfg_slot);
+    FILE* f = fopen(p, "wb");
+    if (f) { fwrite(s_xy, 1, 2, f); fclose(f); }
+}
+static void set_xy(int k, uint8_t id) {
+    if (s_xy[k] == id) return;
+    s_xy[k] = id;
+    cfg_save();
+    fprintf(stderr, "[XBTN] %s = item %02X\n", k ? "Y" : "X", id);
+}
+
+/* ---- ROM check ---------------------------------------------------------- */
 static bool rom_ok(GBContext* c) {
     if (s_enabled < 0) {
         const uint8_t* r = c->rom;
-        s_enabled = r && c->rom_size > 0x8000 + OPEN_DIALOG_CLR &&
+        const uint32_t draw = DRAW_INV_SLOTS_BANK * 0x4000u + (DRAW_INV_SLOTS - 0x4000u);
+        static const uint8_t k_draw[9] = { 0xD5, 0xC5, 0x21, 0x00, 0xDB, 0x09, 0x7E, 0xE0, 0xD8 };
+        s_enabled = r && c->rom_size > draw + sizeof k_draw &&
+                    /* CheckItemsToUse: ld a,[wBlockItemUsage] */
                     r[CHECK_ITEMS_TO_USE] == 0xFA && r[CHECK_ITEMS_TO_USE + 1] == 0x0A &&
                     r[CHECK_ITEMS_TO_USE + 2] == 0xC5 &&
+                    /* DrawInventorySlots: push de / push bc / ld hl,wInventoryItems / add hl,bc ... */
+                    !memcmp(r + draw, k_draw, sizeof k_draw) &&
                     /* ApplyGotItem: ld a,[hl] / call OpenDialogInTable0 */
                     r[GOT_ITEM_DIALOG_RET - 4] == 0x7E && r[GOT_ITEM_DIALOG_RET - 3] == 0xCD &&
                     r[GOT_ITEM_DIALOG_RET - 2] == (OPEN_DIALOG_TBL0 & 0xFF) &&
@@ -150,28 +194,93 @@ static bool rom_ok(GBContext* c) {
                     r[0x4000 + ROCK_DIALOG_RET - 2] == (OPEN_DIALOG_CLR & 0xFF) &&
                     r[0x4000 + ROCK_DIALOG_RET - 1] == (OPEN_DIALOG_CLR >> 8) &&
                     r[0x4000 + ROCK_DIALOG_RET - 16] == 0x1E && r[0x4000 + ROCK_DIALOG_RET - 15] == DIALOG_HEAVY_ROCK;
-        if (s_enabled) { hook(CHECK_ITEMS_TO_USE); hook(XBTN_RETURN); hook(OPEN_DIALOG_TBL0); hook(OPEN_DIALOG_CLR); }
-        fprintf(stderr, "[XBTN] CheckItemsToUse at $%04X: %s\n", CHECK_ITEMS_TO_USE,
-                s_enabled ? "found, extra buttons on" : "NOT found (other ROM revision?), extra buttons off");
+        if (s_enabled) {
+            hook(CHECK_ITEMS_TO_USE); hook(XBTN_RETURN);
+            hook(DRAW_INV_SLOTS); hook(DRAW_RETURN);
+            hook(OPEN_DIALOG_TBL0); hook(OPEN_DIALOG_CLR);
+        }
+        fprintf(stderr, "[XBTN] ROM: %s\n", s_enabled ? "Rev 2 found, Switch-style controls on"
+                                                      : "unknown revision, controls left as they are");
     }
     return s_enabled;
 }
 
-static bool owned(GBContext* c, uint8_t id) {
-    for (int i = 0; i < INV_SLOTS; i++) if (rd(c, W_INV_B + i) == id) return true;
-    return false;
+/* ---- slots ---------------------------------------------------------------- */
+static bool fixed_item(uint8_t id) {
+    return id == INV_SWORD || id == INV_POWER_BRACELET || id == INV_SHIELD || id == INV_PEGASUS_BOOTS;
+}
+static int find_slot(GBContext* c, uint8_t id) {     /* index into wInventoryItems, -1 */
+    if (!id) return -1;
+    for (int i = 0; i < INV_SLOTS; i++) if (rd(c, (uint16_t)(W_INV_B + i)) == id) return i;
+    return -1;
+}
+static int find_cell(GBContext* c, uint8_t id) {     /* index into wInventoryItems (2..11), -1 */
+    for (int i = 2; i < INV_SLOTS; i++) if (rd(c, (uint16_t)(W_INV_B + i)) == id) return i;
+    return -1;
+}
+static bool owned(GBContext* c, uint8_t id) { return find_slot(c, id) >= 0; }
+static void swap_inv(GBContext* c, int i, int j) {
+    uint8_t a = rd(c, (uint16_t)(W_INV_B + i)), b = rd(c, (uint16_t)(W_INV_B + j));
+    wr(c, (uint16_t)(W_INV_B + i), b);
+    wr(c, (uint16_t)(W_INV_B + j), a);
+}
+/* Put `want` (or nothing, if 0 / not in a cell) in slot `s` (0 = B, 1 = A),
+ * swapping with the cell that holds it or with an empty one. */
+static void put_in_slot(GBContext* c, int s, uint8_t want) {
+    uint8_t cur = rd(c, (uint16_t)(W_INV_B + s));
+    if (cur == want) return;
+    int from = want ? find_cell(c, want) : -1;
+    if (from < 0) {
+        if (want && find_slot(c, want) >= 0) return;   /* it's in the other slot: leave it */
+        if (!cur) return;
+        from = find_cell(c, 0);
+        if (from < 0) return;             /* no empty cell (can't happen: 12 slot items max) */
+    }
+    swap_inv(c, s, from);
 }
 
-uint8_t la_extra_buttons_item(int xb) { return (xb >= 0 && xb < XB_COUNT) ? s_item[xb] : 0; }
-bool    la_extra_buttons_held(int xb) { return xb >= 0 && xb < XB_COUNT && s_held[xb]; }
+/* World layout: sword in B, bracelet in A. Whatever else was there goes to a
+ * cell and, if X/Y has room, onto X (from A) / Y (from B), like the game's
+ * own auto-equip of a new item. */
+static void world_layout(GBContext* c) {
+    uint8_t b = rd(c, W_INV_B), a = rd(c, W_INV_A);
+    if (s_menu_layout) {                  /* leaving the inventory: its slots are X and Y */
+        set_xy(0, fixed_item(a) ? 0 : a);
+        set_xy(1, fixed_item(b) ? 0 : b);
+        s_menu_layout = false;
+    } else {
+        if (a && !fixed_item(a) && !s_xy[0] && s_xy[1] != a) set_xy(0, a);
+        if (b && !fixed_item(b) && !s_xy[1] && s_xy[0] != b) set_xy(1, b);
+    }
+    /* The game drops the powder from its slot when it runs out; do the same from X/Y's cell. */
+    if (!rd(c, W_POWDER_COUNT)) {
+        int i = find_cell(c, INV_MAGIC_POWDER);
+        if (i >= 0 && (s_xy[0] == INV_MAGIC_POWDER || s_xy[1] == INV_MAGIC_POWDER)) {
+            wr(c, (uint16_t)(W_INV_B + i), 0);
+            fprintf(stderr, "[XBTN] magic powder used up\n");
+        }
+    }
+    put_in_slot(c, 0, owned(c, INV_SWORD) ? INV_SWORD : 0);
+    put_in_slot(c, 1, owned(c, INV_POWER_BRACELET) ? INV_POWER_BRACELET : 0);
+}
 
-static bool on_extra_button(uint8_t id) {
-    for (int k = 0; k < XB_COUNT; k++) if (s_item[k] == id) return true;
-    return false;
+/* Inventory layout: X item in A, Y item in B. */
+static void menu_layout(GBContext* c) {
+    if (s_menu_layout) return;
+    /* empty both slots first, so X/Y can move in whichever slot they come from */
+    put_in_slot(c, 0, 0);
+    put_in_slot(c, 1, 0);
+    if (owned(c, s_xy[0])) put_in_slot(c, 1, s_xy[0]);
+    if (owned(c, s_xy[1])) put_in_slot(c, 0, s_xy[1]);
+    s_menu_layout = true;
+}
+
+/* ---- pad ------------------------------------------------------------------ */
+static bool trigger(SDL_GameController* pad, SDL_GameControllerAxis ax) {
+    return SDL_GameControllerGetAxis(pad, ax) > 16000;
 }
 
 /* ---- MENU -> save screen ----------------------------------------------- */
-#define GAMEPLAY_FILE_SCREENS_END 0x05     /* intro/title, credits, file select/new/delete/copy */
 static int s_menu_frames;                  /* frames left holding A+B+Start+Select */
 
 bool la_menu_button(GBContext* c) {
@@ -182,45 +291,54 @@ bool la_menu_button(GBContext* c) {
     return false;
 }
 
-/* Once per host frame, from gb_platform_poll_events. */
+/* Once per host frame, from gb_platform_poll_events, after the pad was read. */
 void la_extra_buttons_update(GBContext* c, SDL_GameController* pad, uint8_t* gb_buttons, uint8_t* gb_dpad) {
+    if (c && c->wram && rom_ok(c)) {
+        s_held[PB_X] = pad && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_X);
+        s_held[PB_Y] = pad && SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_Y);
+        s_held[PB_SHIELD] = pad && (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) ||
+                                    trigger(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT));
+        s_held[PB_BOOTS]  = pad && (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) ||
+                                    trigger(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT));
+
+        uint8_t type = rd(c, W_GAMEPLAY_TYPE);
+        if (type >= GAMEPLAY_FILE_SAVE) {            /* a save file is loaded */
+            int slot = rd(c, W_SAVE_SLOT);
+            if (slot != s_cfg_slot) cfg_load(slot);
+            if (type == GAMEPLAY_INVENTORY) {
+                menu_layout(c);
+                /* X/Y are the subscreen's A/B; A/B and the fixed items do nothing */
+                uint8_t sel = rd(c, W_INV_SELECTION);
+                uint8_t cell = sel < INV_CELLS ? rd(c, (uint16_t)(W_INV_CELLS + sel)) : 0;
+                bool blocked = fixed_item(cell);
+                if (gb_buttons) {
+                    *gb_buttons |= 0x03;
+                    if (s_held[PB_X] && !blocked) *gb_buttons &= (uint8_t)~0x01;
+                    if (s_held[PB_Y] && !blocked) *gb_buttons &= (uint8_t)~0x02;
+                }
+            } else {
+                world_layout(c);
+            }
+        }
+    }
     if (s_menu_frames > 0) {               /* exactly A+B+Start+Select, no direction */
         s_menu_frames--;
         if (gb_buttons) *gb_buttons &= 0xF0;
         if (gb_dpad) *gb_dpad = 0xFF;
     }
-    if (!c || !c->wram || !rom_ok(c)) return;
-    if (!s_loaded) { cfg_load(); s_loaded = true; }
-
-    for (int i = 0; i < XB_COUNT; i++) s_held[i] = pad && SDL_GameControllerGetButton(pad, k_pad[i]);
-
-    /* Assign in the inventory screen */
-    if (rd(c, W_GAMEPLAY_TYPE) == GAMEPLAY_INVENTORY && rd(c, W_GAMEPLAY_SUBTYPE) == INVENTORY_INTERACTIVE) {
-        for (int i = 0; i < XB_COUNT; i++) {
-            if (s_held[i] && !s_inv_prev[i]) {
-                uint8_t sel = rd(c, W_INV_SELECTION);
-                if (sel < INV_SLOTS - 2) {
-                    s_item[i] = rd(c, W_INV_B + 2 + sel);
-                    cfg_save();
-                    gb_write8(c, H_JINGLE, JINGLE_VALIDATE);
-                    fprintf(stderr, "[XBTN] %s = item %02X (cursor %u)\n", k_name[i], s_item[i], sel);
-                }
-            }
-        }
-    }
-    memcpy(s_inv_prev, s_held, sizeof s_held);
 }
 
-/* Set up WRAM/HRAM so that one run of CheckItemsToUse sees extra button k as B. */
-static void pass_begin(GBContext* c, int k, bool edge) {
+/* ---- extra passes of CheckItemsToUse ------------------------------------ */
+/* Set up WRAM/HRAM so that one run of CheckItemsToUse sees `item` on B. */
+static void pass_begin(GBContext* c, uint8_t item, bool edge) {
     s_sv_b = rd(c, W_INV_B);  s_sv_a = rd(c, W_INV_A);
     s_sv_mask = gb_read8(c, H_PRESSED_MASK);  s_sv_joy = gb_read8(c, H_JOYPAD_STATE);
     s_sv_free = rd(c, W_FREE_MOVEMENT);
     s_sv_shield = rd(c, W_USING_SHIELD);  s_sv_mirror = rd(c, W_HAS_MIRROR_SHIELD);
 
-    wr(c, W_INV_B, s_item[k]);
+    wr(c, W_INV_B, item);
     wr(c, W_INV_A, 0);
-    gb_write8(c, H_PRESSED_MASK, (uint8_t)((s_sv_mask & ~(J_A | J_B)) | (s_held[k] ? J_B : 0)));
+    gb_write8(c, H_PRESSED_MASK, (uint8_t)((s_sv_mask & ~(J_A | J_B)) | J_B));
     gb_write8(c, H_JOYPAD_STATE, (uint8_t)((s_sv_joy & ~(J_A | J_B)) | (edge ? J_B : 0)));
     if (!s_sv_free) wr(c, W_FREE_MOVEMENT, 1);
 }
@@ -233,7 +351,67 @@ static void pass_end(GBContext* c) {
     if (s_sv_mirror) wr(c, W_HAS_MIRROR_SHIELD, s_sv_mirror);
 }
 
-/* Dialogs shown once per save file. Returns 1 if it skipped the call. */
+static int xbtn_dispatch(GBContext* c, uint16_t addr) {
+    if (addr == CHECK_ITEMS_TO_USE) {
+        if (s_chain || rd(c, W_GAMEPLAY_TYPE) != GAMEPLAY_WORLD || s_menu_layout) return 0;
+        static const uint8_t fixed[PB_COUNT] = { 0, 0, INV_SHIELD, INV_PEGASUS_BOOTS };
+        s_todo_n = 0;
+        for (int k = 0; k < PB_COUNT; k++) {
+            bool edge = s_held[k] && !s_held_prev[k];
+            s_held_prev[k] = s_held[k];
+            uint8_t item = k < 2 ? s_xy[k] : fixed[k];
+            if (item && s_held[k] && owned(c, item)) {
+                s_todo_item[s_todo_n] = item;
+                s_todo_edge[s_todo_n] = edge;
+                s_todo_n++;
+            }
+        }
+        if (!s_todo_n) return 0;
+        /* Let the game's own pass run, but make it return to us. */
+        s_ret = stack16(c, 0);
+        set_stack16(c, 0, XBTN_RETURN);
+        s_chain = true;
+        s_pass = -1;
+        return 0;
+    }
+    if (addr == XBTN_RETURN && s_chain) {
+        if (s_pass >= 0) pass_end(c);
+        if (++s_pass < s_todo_n) {
+            pass_begin(c, s_todo_item[s_pass], s_todo_edge[s_pass]);
+            gb_push16(c, XBTN_RETURN);
+            c->pc = CHECK_ITEMS_TO_USE;
+            return 1;
+        }
+        s_chain = false;
+        c->pc = s_ret;
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- status bar: draw the X/Y items in the slots' places ----------------- */
+static int draw_dispatch(GBContext* c, uint16_t addr) {
+    if (addr == DRAW_INV_SLOTS) {
+        /* in the inventory the slots already hold X/Y; the routine re-enters itself with jp */
+        if (s_draw_active || s_menu_layout || c->rom_bank != DRAW_INV_SLOTS_BANK) return 0;
+        s_draw_b = rd(c, W_INV_B);  s_draw_a = rd(c, W_INV_A);
+        wr(c, W_INV_A, owned(c, s_xy[0]) ? s_xy[0] : 0);
+        wr(c, W_INV_B, owned(c, s_xy[1]) ? s_xy[1] : 0);
+        s_draw_ret = stack16(c, 0);
+        set_stack16(c, 0, DRAW_RETURN);
+        s_draw_active = true;
+        return 0;
+    }
+    if (addr == DRAW_RETURN && s_draw_active) {
+        wr(c, W_INV_B, s_draw_b);  wr(c, W_INV_A, s_draw_a);
+        s_draw_active = false;
+        c->pc = s_draw_ret;
+        return 1;
+    }
+    return 0;
+}
+
+/* ---- dialogs shown once per save file ------------------------------------ */
 static int quiet_dialogs(GBContext* c, uint16_t addr) {
     uint8_t bit = 0;
     if (addr == OPEN_DIALOG_TBL0 && stack16(c, 0) == GOT_ITEM_DIALOG_RET) {
@@ -241,8 +419,6 @@ static int quiet_dialogs(GBContext* c, uint16_t addr) {
         else if (c->a == DIALOG_ACORN)     bit = SEEN_ACORN;
     } else if (addr == OPEN_DIALOG_CLR && c->rom_bank == 2 && stack16(c, 0) == ROCK_DIALOG_RET &&
                c->a == DIALOG_HEAVY_ROCK) {
-        /* The game skips this dialog when the bracelet is on A or B; do the same for X/Y/L/R. */
-        if (owned(c, INV_POWER_BRACELET) && on_extra_button(INV_POWER_BRACELET)) { skip_routine(c); return 1; }
         bit = SEEN_ROCK;
     }
     if (!bit) return 0;
@@ -253,45 +429,10 @@ static int quiet_dialogs(GBContext* c, uint16_t addr) {
     return 0;
 }
 
-static int la_xbtn_dispatch(GBContext* c, uint16_t addr);
 int la_hook_dispatch(GBContext* c, uint16_t addr) {
-    if (addr == OPEN_DIALOG_TBL0 || addr == OPEN_DIALOG_CLR) return quiet_dialogs(c, addr);
-    return la_xbtn_dispatch(c, addr);
-}
-
-/* From the dispatcher, for $1173 and XBTN_RETURN. Returns 1 when it set ctx->pc itself. */
-static int la_xbtn_dispatch(GBContext* c, uint16_t addr) {
-    if (addr == CHECK_ITEMS_TO_USE) {
-        if (s_chain || !s_enabled || !s_loaded || rd(c, W_GAMEPLAY_TYPE) != GAMEPLAY_WORLD) return 0;
-        s_todo_n = 0;
-        for (int k = 0; k < XB_COUNT; k++) {
-            bool edge = s_held[k] && !s_held_prev[k];
-            s_held_prev[k] = s_held[k];
-            if (s_item[k] && s_held[k] && owned(c, s_item[k])) {
-                s_todo_edge[s_todo_n] = edge;
-                s_todo[s_todo_n++] = k;
-            }
-        }
-        if (!s_todo_n) return 0;
-        /* Let the game's own pass run, but make it return to us. */
-        s_ret = (uint16_t)(gb_read8(c, c->sp) | (gb_read8(c, (uint16_t)(c->sp + 1)) << 8));
-        gb_write8(c, c->sp, XBTN_RETURN & 0xFF);
-        gb_write8(c, (uint16_t)(c->sp + 1), XBTN_RETURN >> 8);
-        s_chain = true;
-        s_pass = -1;
-        return 0;
+    switch (addr) {
+    case OPEN_DIALOG_TBL0: case OPEN_DIALOG_CLR: return quiet_dialogs(c, addr);
+    case DRAW_INV_SLOTS:   case DRAW_RETURN:     return draw_dispatch(c, addr);
+    default:                                     return xbtn_dispatch(c, addr);
     }
-    if (addr == XBTN_RETURN && s_chain) {
-        if (s_pass >= 0) pass_end(c);
-        if (++s_pass < s_todo_n) {
-            pass_begin(c, s_todo[s_pass], s_todo_edge[s_pass]);
-            gb_push16(c, XBTN_RETURN);
-            c->pc = CHECK_ITEMS_TO_USE;
-            return 1;
-        }
-        s_chain = false;
-        c->pc = s_ret;
-        return 1;
-    }
-    return 0;
 }
