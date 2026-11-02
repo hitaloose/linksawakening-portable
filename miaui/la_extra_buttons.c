@@ -239,6 +239,20 @@ static void put_in_slot(GBContext* c, int s, uint8_t want) {
     swap_inv(c, s, from);
 }
 
+/* A real inventory never holds the same item twice; drop any copy (repairs
+ * saves hit by an earlier bug that duplicated items into free cells). */
+static void dedupe(GBContext* c) {
+    for (int i = 0; i < INV_SLOTS; i++) {
+        uint8_t id = rd(c, (uint16_t)(W_INV_B + i));
+        if (!id) continue;
+        for (int j = i + 1; j < INV_SLOTS; j++)
+            if (rd(c, (uint16_t)(W_INV_B + j)) == id) {
+                wr(c, (uint16_t)(W_INV_B + j), 0);
+                fprintf(stderr, "[XBTN] removed a duplicate of item %02X\n", id);
+            }
+    }
+}
+
 /* World layout: sword in B, bracelet in A. Whatever else was there goes to a
  * cell and, if X/Y has room, onto X (from A) / Y (from B), like the game's
  * own auto-equip of a new item. */
@@ -302,9 +316,14 @@ void la_extra_buttons_update(GBContext* c, SDL_GameController* pad, uint8_t* gb_
                                     trigger(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT));
 
         uint8_t type = rd(c, W_GAMEPLAY_TYPE);
-        if (type >= GAMEPLAY_FILE_SAVE) {            /* a save file is loaded */
+        /* This can run in the middle of a game frame. While the status bar is
+         * being drawn or an extra pass runs, the slots hold borrowed items:
+         * leave them alone until the next frame. */
+        bool busy = s_draw_active || s_chain;
+        if (type >= GAMEPLAY_FILE_SAVE && !busy) {   /* a save file is loaded */
             int slot = rd(c, W_SAVE_SLOT);
             if (slot != s_cfg_slot) cfg_load(slot);
+            dedupe(c);
             if (type == GAMEPLAY_INVENTORY) {
                 menu_layout(c);
                 /* X/Y are the subscreen's A/B; A/B and the fixed items do nothing */

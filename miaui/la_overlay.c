@@ -8,8 +8,8 @@
  * The status bar letters follow the Switch-style controls (la_extra_buttons.c):
  * "B[" becomes "Y[" and "A[" becomes "X[", in the world (rows 128-143) and at
  * the top of the inventory (rows 0-15). A letter is replaced only when the
- * pixels there are exactly the game's black "B"/"A" on a plain background,
- * so nothing else on screen is ever touched.
+ * pixels there are exactly the game's "B"/"A" shape in two colours (any
+ * two, so fades work too), so nothing else on screen is ever touched.
  *
  * Debug: `adb shell touch /tmp/la_snap` saves the next 160x144 frame to
  * /tmp/la_snap.ppm (and logs the inventory and game mode);
@@ -35,22 +35,24 @@ static const uint8_t k_A[7] = { 0x6, 0x9, 0x9, 0xF, 0x9, 0x9, 0x9 };
 static const uint8_t k_Y[7] = { 0x9, 0x9, 0x9, 0x6, 0x6, 0x6, 0x6 };
 static const uint8_t k_X[7] = { 0x9, 0x9, 0x6, 0x6, 0x6, 0x9, 0x9 };
 
+/* Exact shape match in two colours (any two, so it also works while the
+ * screen fades in or out); then redraw with the same two colours. */
 static void swap_letter(uint32_t* fb, int x0, int y0, const uint8_t* from, const uint8_t* to) {
-    uint32_t bg = 0;
-    bool have_bg = false;
+    uint32_t ink = 0, bg = 0;
+    bool have_ink = false, have_bg = false;
     for (int j = 0; j < 7; j++)
         for (int i = 0; i < 4; i++) {
             uint32_t c = fb[(y0 + j) * GBW + x0 + i] & 0xFFFFFF;
             if (from[j] & (8 >> i)) {
-                if (c != 0x000000) return;
+                if (!have_ink) { ink = c; have_ink = true; } else if (c != ink) return;
             } else {
                 if (!have_bg) { bg = c; have_bg = true; } else if (c != bg) return;
             }
         }
-    if (!have_bg || bg == 0x000000) return;
+    if (!have_ink || !have_bg || ink == bg) return;
     for (int j = 0; j < 7; j++)
         for (int i = 0; i < 4; i++)
-            fb[(y0 + j) * GBW + x0 + i] = 0xFF000000u | ((to[j] & (8 >> i)) ? 0x000000 : bg);
+            fb[(y0 + j) * GBW + x0 + i] = 0xFF000000u | ((to[j] & (8 >> i)) ? ink : bg);
 }
 
 void la_overlay_patch_fb(GBContext* ctx, uint32_t* fb) {
