@@ -98,6 +98,7 @@
 #define INV_PEGASUS_BOOTS  0x08
 #define INV_MAGIC_POWDER   0x0C
 #define W_POWDER_COUNT     0xDB4C  /* BCD */
+#define W_HAS_TOADSTOOL    0xDB4B  /* the toadstool is item 0C too, with no powder count */
 
 /* Pad, logical: the two item slots and the two fixed held items */
 enum { PB_X, PB_Y, PB_SHIELD, PB_BOOTS, PB_COUNT };
@@ -108,6 +109,7 @@ static int     s_cfg_slot = -1;    /* save slot s_xy belongs to */
 static bool    s_menu_layout;      /* slots currently in the inventory layout */
 static bool    s_held[PB_COUNT];   /* sampled once per host frame */
 static bool    s_held_prev[PB_COUNT]; /* as of the last real CheckItemsToUse */
+static bool    s_toad_press;       /* the toadstool's X/Y is held: it's in the real B slot */
 
 /* Chained passes */
 static bool     s_chain;
@@ -256,7 +258,7 @@ static void dedupe(GBContext* c) {
 /* World layout: sword in B, bracelet in A. Whatever else was there goes to a
  * cell and, if X/Y has room, onto X (from A) / Y (from B), like the game's
  * own auto-equip of a new item. */
-static void world_layout(GBContext* c) {
+static void world_layout(GBContext* c, bool toad_in_b) {
     uint8_t b = rd(c, W_INV_B), a = rd(c, W_INV_A);
     if (s_menu_layout) {                  /* leaving the inventory: its slots are X and Y */
         set_xy(0, fixed_item(a) ? 0 : a);
@@ -266,15 +268,16 @@ static void world_layout(GBContext* c) {
         if (a && !fixed_item(a) && !s_xy[0] && s_xy[1] != a) set_xy(0, a);
         if (b && !fixed_item(b) && !s_xy[1] && s_xy[0] != b) set_xy(1, b);
     }
-    /* The game drops the powder from its slot when it runs out; do the same from X/Y's cell. */
-    if (!rd(c, W_POWDER_COUNT)) {
+    /* The game drops the powder from its slot when it runs out; do the same from X/Y's cell
+     * (not the toadstool: same item, but it never has a count). */
+    if (!rd(c, W_POWDER_COUNT) && !rd(c, W_HAS_TOADSTOOL)) {
         int i = find_cell(c, INV_MAGIC_POWDER);
         if (i >= 0 && (s_xy[0] == INV_MAGIC_POWDER || s_xy[1] == INV_MAGIC_POWDER)) {
             wr(c, (uint16_t)(W_INV_B + i), 0);
             fprintf(stderr, "[XBTN] magic powder used up\n");
         }
     }
-    put_in_slot(c, 0, owned(c, INV_SWORD) ? INV_SWORD : 0);
+    put_in_slot(c, 0, toad_in_b ? INV_MAGIC_POWDER : owned(c, INV_SWORD) ? INV_SWORD : 0);
     put_in_slot(c, 1, owned(c, INV_POWER_BRACELET) ? INV_POWER_BRACELET : 0);
 }
 
@@ -336,7 +339,18 @@ void la_extra_buttons_update(GBContext* c, SDL_GameController* pad, uint8_t* gb_
                     if (s_held[PB_Y] && !blocked) *gb_buttons &= (uint8_t)~0x02;
                 }
             } else {
-                world_layout(c);
+                /* The witch (and the toadstool's other uses) look for it in a
+                 * real slot together with that slot's button, outside
+                 * CheckItemsToUse: while its X/Y is held it takes the B slot
+                 * (the sword's) and, from the next frame on, B is pressed. */
+                bool toad = type == GAMEPLAY_WORLD && rd(c, W_HAS_TOADSTOOL) &&
+                            owned(c, INV_MAGIC_POWDER) &&
+                            ((s_xy[0] == INV_MAGIC_POWDER && s_held[PB_X]) ||
+                             (s_xy[1] == INV_MAGIC_POWDER && s_held[PB_Y]));
+                if (toad && rd(c, W_INV_B) == INV_MAGIC_POWDER && gb_buttons)
+                    *gb_buttons &= (uint8_t)~0x02;
+                s_toad_press = toad;
+                world_layout(c, toad);
             }
         }
     }
@@ -379,6 +393,7 @@ static int xbtn_dispatch(GBContext* c, uint16_t addr) {
             bool edge = s_held[k] && !s_held_prev[k];
             s_held_prev[k] = s_held[k];
             uint8_t item = k < 2 ? s_xy[k] : fixed[k];
+            if (s_toad_press && item == INV_MAGIC_POWDER) continue;   /* pressed for real */
             if (item && s_held[k] && owned(c, item)) {
                 s_todo_item[s_todo_n] = item;
                 s_todo_edge[s_todo_n] = edge;
