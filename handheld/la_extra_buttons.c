@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* ROM (Rev 2) */
 #define CHECK_ITEMS_TO_USE  0x1173          /* $1177 in zladx/LADX-Disassembly */
@@ -292,6 +293,29 @@ static void menu_layout(GBContext* c) {
     s_menu_layout = true;
 }
 
+/* ---- test kit ----------------------------------------------------------- */
+/* For testing only: `adb shell touch /tmp/la_kit` while in the world gives the
+ * current save the bow, bombs, hookshot, Roc's Feather and shovel (in free
+ * cells), 30 arrows and bombs, and the magnifying lens as the trading item
+ * (the Goriya only shows up with it). It changes the save once saved: use a
+ * throwaway file. */
+#define W_TRADE_ITEM   0xDB0E
+#define W_ARROW_COUNT  0xDB45
+#define W_BOMB_COUNT   0xDB4D
+static void test_kit(GBContext* c) {
+    static const uint8_t give[] = { 0x05, 0x02, 0x06, 0x0A, 0x0B };  /* bow bombs hookshot feather shovel */
+    for (size_t k = 0; k < sizeof give; k++) {
+        if (owned(c, give[k])) continue;
+        int i = find_cell(c, 0);
+        if (i < 0) break;
+        wr(c, (uint16_t)(W_INV_B + i), give[k]);
+    }
+    if (rd(c, W_ARROW_COUNT) < 0x30) wr(c, W_ARROW_COUNT, 0x30);
+    if (rd(c, W_BOMB_COUNT) < 0x30)  wr(c, W_BOMB_COUNT, 0x30);
+    wr(c, W_TRADE_ITEM, 0x0E);
+    fprintf(stderr, "[XBTN] test kit given\n");
+}
+
 /* ---- pad ------------------------------------------------------------------ */
 static bool trigger(SDL_GameController* pad, SDL_GameControllerAxis ax) {
     return SDL_GameControllerGetAxis(pad, ax) > 16000;
@@ -339,6 +363,11 @@ void la_extra_buttons_update(GBContext* c, SDL_GameController* pad, uint8_t* gb_
                     if (s_held[PB_Y] && !blocked) *gb_buttons &= (uint8_t)~0x02;
                 }
             } else {
+                static int kit_poll;
+                if (type == GAMEPLAY_WORLD && ++kit_poll % 30 == 0 && access("/tmp/la_kit", F_OK) == 0) {
+                    unlink("/tmp/la_kit");
+                    test_kit(c);
+                }
                 /* The witch (and the toadstool's other uses) look for it in a
                  * real slot together with that slot's button, outside
                  * CheckItemsToUse: while its X/Y is held it takes the B slot
