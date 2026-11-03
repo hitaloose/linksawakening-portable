@@ -141,6 +141,19 @@ so on), so they're kept when you rebuild.
 └── screenshots/
 ```
 
+## Linux handhelds (MiaUI, ...)
+
+A build for small Linux handhelds with Switch-style controls (B sword, A
+talk/lift, R shield, L boots, X/Y items), the Piece of Power / Acorn / heavy
+rock messages shown once per save, and a MENU button that opens the save
+screen. MiaUI (Anbernic RG35XX) is done; other consoles share the same layer
+and only add their own build script. See [docs/HANDHELD.md](docs/HANDHELD.md).
+
+```sh
+git clone --recursive <this repo> && cd linksawakening-portable
+./build-miaui.sh path/to/your-rom.gbc     # needs git + Docker
+```
+
 ## Credits
 
 - Recompiler and runtime: [arcanite24/gb-recompiled](https://github.com/arcanite24/gb-recompiled),

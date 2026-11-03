@@ -1,4 +1,4 @@
-/* Screen layer for Link's Awakening DX on MiaUI. See la_overlay.c. */
+/* Screen layer for Link's Awakening DX on Linux handhelds. See la_overlay.c. */
 #ifndef LA_OVERLAY_H
 #define LA_OVERLAY_H
 #include "gbrt.h"

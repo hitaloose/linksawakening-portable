@@ -1,4 +1,4 @@
-/* Switch-style controls for Link's Awakening DX on MiaUI. See la_extra_buttons.c. */
+/* Switch-style controls for Link's Awakening DX on Linux handhelds. See la_extra_buttons.c. */
 #ifndef LA_EXTRA_BUTTONS_H
 #define LA_EXTRA_BUTTONS_H
 #include "gbrt.h"
@@ -17,7 +17,7 @@ void    la_extra_buttons_update(GBContext* ctx, struct _SDL_GameController* pad,
 bool    la_menu_button(GBContext* ctx);
 
 /* Hooks in rom.c's trampoline dispatcher: it calls la_hook_dispatch(ctx, addr)
- * for every address whose bit is set in la_hook_map (see scripts/build_miaui.sh). */
+ * for every address whose bit is set in la_hook_map (see scripts/handheld.sh). */
 extern uint8_t la_hook_map[0x10000 / 8];
 int     la_hook_dispatch(GBContext* ctx, uint16_t addr);
 

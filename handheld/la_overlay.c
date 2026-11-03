@@ -1,7 +1,7 @@
-/* Screen layer for Link's Awakening DX on MiaUI.
+/* Screen layer for Link's Awakening DX on Linux handhelds (MiaUI, ...).
  *
- * The game's own screen, as large as the 640x480 panel allows with its 10:9
- * aspect (533x480, centred), scaled "sharp-bilinear": nearest 4x into a
+ * The game's own screen, as large as the panel allows with its 10:9
+ * aspect (533x480 on a 640x480 panel, centred), scaled "sharp-bilinear": nearest 4x into a
  * render target, then a linear copy down to the panel, so pixels are even
  * without the blur of plain bilinear.
  *

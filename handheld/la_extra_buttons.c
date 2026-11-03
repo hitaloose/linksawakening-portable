@@ -1,4 +1,4 @@
-/* Switch-style controls for Link's Awakening DX on MiaUI.
+/* Switch-style controls for Link's Awakening DX on Linux handhelds (MiaUI, ...).
  *
  *   B        sword (fixed)            R / R2   shield, while held
  *   A        talk, read, lift, pull   L / L2   Pegasus Boots, while held
@@ -40,7 +40,7 @@
  *    opens the game's own save screen; on the title and file screens it quits.
  *
  * The routines are reached through the trampoline dispatcher in the
- * generated rom.c (scripts/build_miaui.sh adds one line there that calls
+ * generated rom.c (scripts/handheld.sh adds one line there that calls
  * la_hook_dispatch for the addresses set in la_hook_map).
  */
 #include "gbrt.h"
