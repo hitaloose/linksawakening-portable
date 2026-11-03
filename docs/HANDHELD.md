@@ -40,7 +40,7 @@ the layer off. Nothing derived from the game is in this repository or in any
 download: the game is recompiled from your ROM on your machine.
 
 ```sh
-git clone --recursive <this repo>
+git clone --recursive https://github.com/hitaloose/linksawakening-portable.git
 cd linksawakening-portable
 ./build-miaui.sh path/to/your-rom.gbc
 ```

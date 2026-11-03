@@ -150,7 +150,7 @@ screen. MiaUI (Anbernic RG35XX) is done; other consoles share the same layer
 and only add their own build script. See [docs/HANDHELD.md](docs/HANDHELD.md).
 
 ```sh
-git clone --recursive <this repo> && cd linksawakening-portable
+git clone --recursive https://github.com/hitaloose/linksawakening-portable.git && cd linksawakening-portable
 ./build-miaui.sh path/to/your-rom.gbc     # needs git + Docker
 ```
 
