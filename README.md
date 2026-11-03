@@ -1,181 +1,197 @@
-# linksawakening-portable
+# linksawakening-portable — handheld edition
 
 *The Legend of Zelda: Link's Awakening DX*, statically recompiled to C and
-built for game consoles, handhelds, Android and the browser. It's the console
-side of [LinksAwakening](https://github.com/sp00nznet/LinksAwakening): the same
-game code and runtime, with one platform backend per target. You supply your
-own ROM; no game code is distributed here.
+running natively on the cheap Chinese Linux handhelds (Anbernic, Miyoo,
+TrimUI and friends), with Switch-style controls and a few quality-of-life
+changes. No emulator: the game's code was turned into C ahead of time from
+your own ROM and compiled for the console.
 
-Part of the sp00nznet recomp projects, built on the
-[gb-recompiled](https://github.com/sp00nznet/gb-recompiled) toolkit and following
-the same house style (generated code is never committed).
+> **Status: the only console done is the Anbernic RG35XX (the original "OG"
+> model) running [MiaUI](https://github.com/hitaloose/MiaUI-GPU-RG35XX).**
+> The game layer is shared, so other consoles and systems (GarlicOS,
+> Onion OS, PortMaster, ...) only need their own build script. See
+> [Adding a console](#adding-a-console).
 
-## Status
+This is a fork of
+[sp00nznet/linksawakening-portable](https://github.com/sp00nznet/linksawakening-portable),
+which builds the same game for PlayStation, Nintendo, Xbox, Dreamcast,
+Android and the browser. Those targets are still in the tree, untouched and
+untested here. Use upstream for them.
 
-**v0.1.0.** Every target below builds from your ROM with one command (the
-installer, `Setup.cmd` or `setup.sh`), tested end to end on 2026-10-20. "Last seen
-running" is the most recent time someone actually ran that build; a target
-that has only been built says so.
+You supply your own ROM; no game code is distributed here.
 
-| Target | Backend | Builds (2026-10-20) | Last seen running |
-|---|---|---|---|
-| Windows | SDL2 ([LinksAwakening](https://github.com/sp00nznet/LinksAwakening)) | ✅ 23 MB exe | Plays through dungeons; headless run checked 2026-10-20 |
-| PlayStation 4 | SDL2 (OpenOrbis) | ✅ 19 MB `.pkg` | Real hardware |
-| PlayStation 3 | `platform_psl1ght.c` | ✅ 23 MB `EBOOT.BIN` | RPCS3, ~56 fps, title + gameplay |
-| Nintendo 3DS | `platform_3ds.c` | ✅ 20 MB `.3dsx` | Azahar and a real New 2DS XL, gameplay |
-| Nintendo Wii | `platform_wii.c` | ✅ 22 MB `.dol` | Dolphin, title + intro |
-| Nintendo GameCube | `platform_gamecube.c` | ✅ 22 MB `.dol` | Not run yet |
-| Sega Dreamcast | `platform_dreamcast.c` | ✅ 14 MB `.elf` (`-Os`) | Flycast, title screen; not full speed |
-| PlayStation 2 | `platform_ps2.c` | ✅ 22 MB `.elf` | Not run yet |
-| PSP | `platform_psp.c` | ✅ 20 MB `EBOOT.PBP` | Not run yet |
-| PS Vita | `platform_vita.c` | ✅ 9.4 MB `.vpk` | Not run yet |
-| Android | SDL2 (NDK) | ✅ 10 MB `.apk` (x86_64) | Android emulator, title screen |
-| WebAssembly | SDL2 (Emscripten) | ✅ 14 MB `.wasm` | Browser: loads, renders, plays audio |
-| Xbox 360 | `platform_libxenon.c` | ✅ 22 MB `.elf32` (XeLL) | Never: Xenia can't run libxenon homebrew; needs RGH/JTAG hardware |
-| Original Xbox | SDL2 (NXDK) | ✅ 13 MB `.xbe` | Hangs at the Xbox logo in xemu |
+## What's different
 
-Tested ROM: *Legend of Zelda, The - Link's Awakening DX (USA, Europe) (Rev 2)*,
-SHA-1 `1c091225688d966928cc74336dbef2e07d12a47c`.
+**Controls, like the 2019 Switch remake:**
 
-Multiplayer isn't part of these builds; it lives in
-[la-mp](https://github.com/sp00nznet/la-mp).
+| Button | Does |
+|---|---|
+| B | Sword. Fixed; hold it for the spin attack. |
+| A | Talk, read, lift, pull. This is the Power Bracelet, with no slot of its own. |
+| R / R2 | Shield, while held |
+| L / L2 | Pegasus Boots, while held |
+| X / Y | The two item slots. On the Game Boy these were A and B. |
+| MENU | Opens the save screen in game; quits to MiaUI on the title screen |
+| Start / Select | Subscreen and map, as in the original |
 
-## Screenshots
+- In the subscreen, X and Y equip the item under the cursor. The sword,
+  shield, bracelet and boots are always on their buttons, so they're shown
+  there but can't be equipped.
+- The status bar reads `Y[ ] X[ ]`.
+- What's on X and Y is remembered for each save file.
 
-| 3DS — title (Azahar) | 3DS — name entry | 3DS — gameplay |
-|----------------------|------------------|----------------|
-| ![3DS title](screenshots/3ds-title.png) | ![3DS name entry](screenshots/3ds-nameentry.png) | ![3DS gameplay](screenshots/3ds-gameplay.png) |
+**Quality of life:**
+- "You got a Piece of Power!", "You've got a Guardian Acorn!" and "This looks
+  pretty heavy" show the first time only. This is kept per save file.
+- The screen is the largest 10:9 picture the panel allows (533×480 on the
+  RG35XX), with sharp-bilinear scaling.
+- The audio follows the panel's real refresh rate (60.46 Hz), so it doesn't pop.
+- The save goes to the SD card as soon as the game saves, written atomically.
 
-| PS3 — title (RPCS3) | Wii — title (Dolphin) | Android — title (emulator) |
-|---------------------|-----------------------|----------------------------|
-| ![PS3 title](screenshots/ps3-title.png) | ![Wii title](screenshots/wii-title.png) | ![Android title](screenshots/android-title.png) |
+**Known limits:**
+- **Bomb arrows don't fire from X/Y.** The game needs the bow and the bombs
+  in its two real slots.
+- **The Goriya's boomerang trade refuses the item.** He looks for the item
+  in the sword's slot.
+- **Only one ROM revision works:** *Link's Awakening DX (USA, Europe) (Rev 2)*,
+  SHA-1 `1c091225688d966928cc74336dbef2e07d12a47c`. With any other ROM the
+  game still runs, but with the original controls.
 
-| Sega Dreamcast — title (Flycast, stock 16 MB) |
-|-----------------------------------------------|
-| ![Dreamcast title](screenshots/dreamcast_title.png) |
+## How it works
 
-## Getting Started
+The ROM is recompiled unchanged. The port changes the game from the outside,
+in two ways:
+- **Hooks:** the recompiled code goes through a dispatcher for calls and
+  jumps. The build adds one line to it, so that a few chosen ROM addresses
+  run our C code first (`la_hook_dispatch` in `handheld/la_extra_buttons.c`).
+- **Memory:** game RAM is read and written once per frame.
 
-Every route builds all 13 consoles from your ROM inside Docker, so the only
-thing to install is Docker itself:
-[Docker Desktop](https://www.docker.com/products/docker-desktop/) on Windows
-and macOS, or [Docker Engine](https://docs.docker.com/engine/install/) on
-Linux. Start it before you begin. The first run downloads about 20 GB of
-toolchain images and takes 1 to 2 hours. A rerun skips everything already
-built.
+At startup the port checks the bytes at every address it hooks. With another
+ROM revision the layer turns itself off.
 
-### Installer (easiest)
+### Controls
 
-1. Download the installer for your system from the
-   [latest release](https://github.com/sp00nznet/linksawakening-portable/releases/latest):
-   `LinksAwakening-Consoles-Installer-windows-x64.exe`, `-linux-x64.tar.gz` or
-   `-macos-arm64.zip`. It isn't signed: on Windows, SmartScreen asks first
-   (**More info**, **Run anyway**); on a Mac, open it once, then **Open Anyway**
-   in System Settings → Privacy & Security.
-2. Choose the folder your ROM is in (the `.gbc`, or a `.zip` with it inside),
-   and press **Build**.
-3. When it's done, **Console builds** opens the folder with one subfolder per
-   console. `builds/README.txt` says which built and what's known to work.
+The game has only two button slots, B (`$DB00`) and A (`$DB01`). A lot of
+code reads them directly. `CheckItemsToUse` does, and so do about 26
+liftable objects (pots, cuccos, statues), which look for the Power Bracelet
+in a slot plus the matching button. So the port doesn't try to rewrite
+those checks:
 
-The installer is [recomp-launcher](https://github.com/sp00nznet/recomp-launcher)
-with [launcher/launcher.json](launcher/launcher.json); all it does is run the
-setup script below with your ROM folder.
+- **B and A stay real.** In the world, the B slot holds the sword and the A
+  slot the bracelet, so B and A behave exactly as on the Game Boy: spin
+  attack, talking, lifting, reading.
+- **X, Y, R and L are extra item passes.** While one of them is held, the
+  port lets the game's own `CheckItemsToUse` (`$1173`) run, then runs it
+  again once per held button. For each extra run it puts that item in the B
+  slot and that button's state on B (held, and newly pressed). Afterwards it
+  restores everything, before the rest of the frame sees it. The shield (R)
+  and boots (L) work this way too, so you can hold the shield and swing the
+  sword at once.
+- **Subscreen.** While it's open, the port swaps the two slots to the X and Y
+  items, and physical X/Y become the game's A/B there. That way the game's
+  own equip code still works, with its sounds, counts and the ocarina's song
+  menu. On a fixed item the press is ignored. The swaps only exchange a slot
+  with a subscreen cell, so no item is ever created or lost. The save is
+  always written in the world layout, so the save file stays a normal one.
+- **Status bar.** `DrawInventorySlots` (bank `$20`, `$5CA8`) draws the
+  status bar. The port runs it with the X/Y items in the slots for the
+  duration of the call. After the frame is drawn, the B/A letters are
+  redrawn as Y/X, but only where the pixels exactly match the letter shape,
+  in any two colours, so they also survive the fades.
+- **Toadstool.** The witch and a few other places check the toadstool in a
+  real slot together with that slot's button, so its X/Y works differently.
+  While held, it takes the sword's slot for real and presses B.
+- **MENU.** In the world it holds A+B+Start+Select for 4 frames, the game's
+  own save shortcut. On the title and file screens it quits.
 
-### Setup script
+### Messages shown once
 
-1. Get the source, with submodules:
-   ```
-   git clone --recurse-submodules https://github.com/sp00nznet/linksawakening-portable.git
-   cd linksawakening-portable
-   ```
-   Trip-up: on Windows, `Filename too long` means the nested submodules hit
-   the 260-character path limit. Run `git config --global core.longpaths true`
-   (or clone to a shorter path), then `git submodule update --init --recursive`.
-2. Run the setup, giving it your ROM's folder:
-   - Windows: double-click `Setup.cmd` (it asks), or
-     `tools\setup.ps1 -Game <folder>`
-   - Linux and macOS: `./setup.sh --game-dir <folder>`
+Dialogs open through `OpenDialogInTable0` (`$237C`) and, for the heavy rock,
+bank 2's `$7543`. The port recognises the Piece of Power, Guardian Acorn and
+heavy rock calls by their return address and dialog number. The second time,
+it returns from the routine without opening the box. What was already shown
+is kept in `$DB59`, an unused byte of the death counter. That byte lies
+inside the area the game saves, so the setting belongs to each save file.
 
-   Add `-Targets wii,psp` (`--targets wii,psp`) to build only some consoles.
-3. The builds are in `builds/<console>/`, with a summary in
-   `builds/README.txt`. Each console's full log is in `build-logs/`.
+### Screen, audio and saves
 
-What it runs, step by step: [docs/BUILDING.md](docs/BUILDING.md). It turns
-your ROM into C once in the `devkitpro/devkitppc` image
-(`scripts/recomp.sh`), then runs each line of
-[scripts/targets.tsv](scripts/targets.tsv) in that console's toolchain image.
-You can run any one of those lines by hand.
+- **Screen.** The 160×144 frame is scaled 4× with nearest neighbour into a
+  640×576 render target, then copied linearly to 533×480. Pixels come out
+  even, with only the slight softening of a downscale.
+- **Audio.** The game is paced by the panel's vsync, at 60.46 Hz, while the
+  Game Boy runs at 59.73 Hz. So the game makes about 1.2% more sound than
+  the audio device plays, and samples used to be dropped, which you hear as
+  pops. Now the audio is resampled by 59.73/60.46, nudged by how full the
+  buffer is, so the buffer stays half full.
+- **Saves.** The runtime used to copy the cartridge RAM to disk every
+  5 seconds, and skipped the copy on exit while the game had that RAM
+  locked. The game locks it right after every save, so a quick "save & quit"
+  was lost. Now the save is written as soon as the game finishes writing
+  it, and again on exit. The write goes to a temporary file, is flushed and
+  then renamed over the old save, so a power cut can't corrupt it.
 
-## Usage
+## Install on an RG35XX with MiaUI
 
-Each build is a normal homebrew package for its platform: copy it over and
-launch it the way that platform runs homebrew (BUILDING.md has the details per
-target). Saves go to a `linksawakening` folder on the target's storage
-(`sd:/linksawakening/` on Wii and GameCube, `ms0:/linksawakening/` on PSP, and
-so on), so they're kept when you rebuild.
+You need git, [Docker](https://docs.docker.com/get-docker/) (Docker Desktop on
+macOS and Windows) and your ROM. Nothing else is installed on your machine.
 
-## Building from source
+```sh
+git clone --recursive https://github.com/hitaloose/linksawakening-portable.git
+cd linksawakening-portable
+./build-miaui.sh path/to/your-rom.gbc
+```
 
-- **Setup:** `setup.sh` (Linux, macOS) and `tools/setup.ps1` (Windows) do
-  the same thing: check Docker, run `scripts/recomp.sh` (ROM to C), then every
-  line of `scripts/targets.tsv`. Android's toolchain image is built from
-  `docker/android.Dockerfile`.
-- **Build scripts:** `scripts/build_<target>.sh`. They find the repo through
-  `scripts/env.sh`, so they run from any checkout, under WSL or inside Docker
-  with the repo mounted at `/src`, and skip recompiling `rom.c` when its
-  object file is newer.
-- **The game and runtime:** the `LinksAwakening/` submodule. It holds
-  `rom_main.c` (one entry point for every target) and, inside it,
-  `gbrecomp/runtime/` with every `platform_*.c` backend.
-- **Porting notes:** [docs/PORTING.md](docs/PORTING.md) (the platform contract),
-  [docs/ENDIAN_AUDIT.md](docs/ENDIAN_AUDIT.md) (big-endian targets),
-  [docs/PAL_AUDIT.md](docs/PAL_AUDIT.md).
+The first run builds the toolchain image and compiles the game, about
+10 to 20 minutes. Reruns skip what's already done.
+
+The output is `build-miaui/linksawakening-miaui.zip`. Unzip it at the root of
+the SD card; it holds `Ports/Links Awakening DX.pak/`. The game then shows up
+in MiaUI under Ports.
+
+Saves and a log of the last run are in `Saves/LinksAwakening/` on the card.
+
+## Adding a console
+
+Everything above, except packaging, lives in a shared handheld layer:
+`handheld/`, built with `-DGBRT_HANDHELD`. A new console adds four files:
+
+- `build-<console>.sh`
+- a Docker toolchain
+- `scripts/build_<console>.sh`
+- a launcher
+
+The controls and messages stay the same on every console. The how-to is in
+[docs/HANDHELD.md](docs/HANDHELD.md). Pull requests for GarlicOS, Onion OS,
+PortMaster and others are welcome.
 
 ```
 .
-├── LinksAwakening/   submodule: entry point, gen/ (your ROM's code), gbrecomp/ (runtime)
-├── scripts/          build_<target>.sh, env.sh, PS4 packaging, WASM shell
-├── android/          Gradle project (SDL2 is staged in at build time)
-├── xbox/             NXDK Makefile
-├── docs/             BUILDING.md and the porting notes
-└── screenshots/
-```
-
-## Linux handhelds (MiaUI, ...)
-
-A build for small Linux handhelds with Switch-style controls (B sword, A
-talk/lift, R shield, L boots, X/Y items), the Piece of Power / Acorn / heavy
-rock messages shown once per save, and a MENU button that opens the save
-screen. MiaUI (Anbernic RG35XX) is done; other consoles share the same layer
-and only add their own build script. See [docs/HANDHELD.md](docs/HANDHELD.md).
-
-```sh
-git clone --recursive https://github.com/hitaloose/linksawakening-portable.git && cd linksawakening-portable
-./build-miaui.sh path/to/your-rom.gbc     # needs git + Docker
+├── build-miaui.sh    one command: ROM -> MiaUI package
+├── handheld/         shared layer: controls, status bar, dialogs, screen
+├── miaui/            MiaUI launcher
+├── scripts/          handheld.sh (shared build), build_miaui.sh, recomp.sh, upstream targets
+├── docker/           toolchain images
+├── docs/             HANDHELD.md, and upstream's building and porting notes
+└── LinksAwakening/   submodule: entry point, gen/ (your ROM's code), gbrecomp/ (runtime)
 ```
 
 ## Credits
 
-- Recompiler and runtime: [arcanite24/gb-recompiled](https://github.com/arcanite24/gb-recompiled),
-  with our changes in [sp00nznet/gb-recompiled](https://github.com/sp00nznet/gb-recompiled)
+- Original port and runtime: [sp00nznet/linksawakening-portable](https://github.com/sp00nznet/linksawakening-portable),
+  [sp00nznet/LinksAwakening](https://github.com/sp00nznet/LinksAwakening)
+- Recompiler: [arcanite24/gb-recompiled](https://github.com/arcanite24/gb-recompiled),
+  with sp00nznet's and this fork's changes in
+  [hitaloose/gb-recompiled](https://github.com/hitaloose/gb-recompiled)
 - Game knowledge: the [LADX-Disassembly](https://github.com/zladx/LADX-Disassembly) contributors
-- Toolchains: [devkitPro](https://devkitpro.org/) (Wii, GameCube, 3DS),
-  [PSL1GHT](https://github.com/ps3dev/PSL1GHT) (PS3),
-  [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) (PS4),
-  [KallistiOS](https://github.com/KallistiOS/KallistiOS) (Dreamcast),
-  [PS2SDK](https://github.com/ps2dev/ps2sdk) and [gsKit](https://github.com/ps2dev/gsKit) (PS2),
-  [pspdev](https://github.com/pspdev/pspdev) (PSP), [VitaSDK](https://vitasdk.org/) (Vita),
-  [libxenon](https://github.com/Free60Project/libxenon) (Xbox 360),
-  [nxdk](https://github.com/XboxDev/nxdk) (original Xbox),
-  [Emscripten](https://emscripten.org/), the Android NDK, and [SDL2](https://github.com/libsdl-org/SDL)
+- [SDL2](https://github.com/libsdl-org/SDL), and the MiaUI / MinUI projects
 
 ## License
 
 The code in this repository is [MIT](LICENSE).
 
 That covers the build scripts, packaging and documentation. It does not and
-cannot cover *The Legend of Zelda: Link's Awakening DX*: the game's code, art,
+cannot cover *The Legend of Zelda: Link's Awakening DX*. The game's code, art,
 audio and data belong to Nintendo, are not distributed here, and you need your
 own legitimate copy. The C generated from your ROM is a derivative of the game
-and is never committed. This project is not affiliated with or endorsed by
-Nintendo.
+and is never committed. Don't share built packages either: they contain it.
+This project is not affiliated with or endorsed by Nintendo.
