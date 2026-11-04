@@ -37,7 +37,8 @@
  *    in $DB59, the unused third byte of the death counter, inside the save
  *    data, so it follows each save file.
  *  - MENU: in the world it holds A+B+Start+Select for a few frames, which
- *    opens the game's own save screen; on the title and file screens it quits.
+ *    opens the game's own save screen; on the title and file screens it opens
+ *    the options screen (la_settings.c), which has QUIT GAME.
  *
  * The routines are reached through the trampoline dispatcher in the
  * generated rom.c (scripts/handheld.sh adds one line there that calls

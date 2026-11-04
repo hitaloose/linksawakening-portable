@@ -13,7 +13,8 @@ struct _SDL_GameController;
 /* Once per host frame, after the platform read the pad into the GB buttons. */
 void    la_extra_buttons_update(GBContext* ctx, struct _SDL_GameController* pad,
                                 uint8_t* gb_buttons, uint8_t* gb_dpad);
-/* MENU pressed: opens the save screen in the world; returns true when the app should quit instead. */
+/* MENU pressed: opens the save screen in the world; returns true on the title/file
+ * screens, where the platform opens the options screen (la_settings.c) instead. */
 bool    la_menu_button(GBContext* ctx);
 
 /* Hooks in rom.c's trampoline dispatcher: it calls la_hook_dispatch(ctx, addr)

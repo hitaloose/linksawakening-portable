@@ -5,7 +5,8 @@
 #   - Switch-style controls (B sword, A talk/lift, R shield, L boots, X/Y items)
 #   - the status bar relabelled Y/X, the screen at the largest 10:9 size
 #   - Piece of Power / Acorn / heavy rock dialogs shown once per save
-#   - MENU (SDL "guide") opens the save screen, quits on the title screen
+#   - MENU (SDL "guide") opens the save screen; on the title screen an options
+#     screen (colour correction, scaling, quit)
 #   - the battery save written to disk as soon as the game saves
 # A target only says how to compile for its console and how to package it.
 #
@@ -44,6 +45,7 @@ handheld_build() {
     cxx1 "$RT/src/platform_sdl.cpp" platform_sdl.o
     cc1  "$ROOT/handheld/la_extra_buttons.c" la_extra_buttons.o
     cc1  "$ROOT/handheld/la_overlay.c" la_overlay.o
+    cc1  "$ROOT/handheld/la_settings.c" la_settings.o
 
     echo '[2/4] Entry point + ROM data'
     cc1 "$LA/rom_main.c" rom_main.o
