@@ -61,6 +61,8 @@
 #define GOT_ITEM_DIALOG_RET 0x105B          /* return address of its call in ApplyGotItem */
 #define OPEN_DIALOG_CLR     0x7543          /* bank 2: OpenDialogInTable0AndClearIncrement */
 #define ROCK_DIALOG_RET     0x7322          /* bank 2: return address of the "heavy rock" call */
+#define GORIYA_STATE1        0x4690   /* bank $19: GoriyaState1Handler, reads the B slot to trade */
+#define GORIYA_BANK          0x19
 #define DIALOG_PIECE_OF_POWER 0x08
 #define DIALOG_ACORN          0xEC
 #define DIALOG_HEAVY_ROCK     0x8D
@@ -110,7 +112,8 @@ static int     s_cfg_slot = -1;    /* save slot s_xy belongs to */
 static bool    s_menu_layout;      /* slots currently in the inventory layout */
 static bool    s_held[PB_COUNT];   /* sampled once per host frame */
 static bool    s_held_prev[PB_COUNT]; /* as of the last real CheckItemsToUse */
-static bool    s_toad_press;       /* the toadstool's X/Y is held: it's in the real B slot */
+static bool    s_toad_press;
+static int     s_xy_cell[2] = { -1, -1 };  /* where the X/Y items were last frame */       /* the toadstool's X/Y is held: it's in the real B slot */
 
 /* Chained passes */
 static bool     s_chain;
@@ -201,6 +204,11 @@ static bool rom_ok(GBContext* c) {
             hook(CHECK_ITEMS_TO_USE); hook(XBTN_RETURN);
             hook(DRAW_INV_SLOTS); hook(DRAW_RETURN);
             hook(OPEN_DIALOG_TBL0); hook(OPEN_DIALOG_CLR);
+            /* GoriyaState1Handler: call / call / ld a,[wDialogAskSelectionIndex] / and a / jr nz / ld a,[$DB00] */
+            const uint8_t* g = r + GORIYA_BANK * 0x4000u + (GORIYA_STATE1 - 0x4000u);
+            if (g[0] == 0xCD && g[3] == 0xCD && g[6] == 0xFA && g[7] == 0x77 && g[8] == 0xC1 &&
+                g[9] == 0xA7 && g[10] == 0x20 && g[12] == 0xFA && g[13] == 0x00 && g[14] == 0xDB)
+                hook(GORIYA_STATE1);
         }
         fprintf(stderr, "[XBTN] ROM: %s\n", s_enabled ? "Rev 2 found, Switch-style controls on"
                                                       : "unknown revision, controls left as they are");
@@ -266,8 +274,9 @@ static void world_layout(GBContext* c, bool toad_in_b) {
         set_xy(1, fixed_item(b) ? 0 : b);
         s_menu_layout = false;
     } else {
-        if (a && !fixed_item(a) && !s_xy[0] && s_xy[1] != a) set_xy(0, a);
-        if (b && !fixed_item(b) && !s_xy[1] && s_xy[0] != b) set_xy(1, b);
+        /* an X/Y item that's gone (traded, used up) leaves its button free */
+        if (a && !fixed_item(a) && !owned(c, s_xy[0]) && s_xy[1] != a) set_xy(0, a);
+        if (b && !fixed_item(b) && !owned(c, s_xy[1]) && s_xy[0] != b) set_xy(1, b);
     }
     /* The game drops the powder from its slot when it runs out; do the same from X/Y's cell
      * (not the toadstool: same item, but it never has a count). */
@@ -280,6 +289,34 @@ static void world_layout(GBContext* c, bool toad_in_b) {
     }
     put_in_slot(c, 0, toad_in_b ? INV_MAGIC_POWDER : owned(c, INV_SWORD) ? INV_SWORD : 0);
     put_in_slot(c, 1, owned(c, INV_POWER_BRACELET) ? INV_POWER_BRACELET : 0);
+    /* An X/Y item replaced in its own cell (the Goriya's trades) gives that
+     * button the new item. */
+    for (int k = 0; k < 2; k++) {
+        if (s_xy[k] && !owned(c, s_xy[k]) && s_xy_cell[k] >= 2) {
+            uint8_t now = rd(c, (uint16_t)(W_INV_B + s_xy_cell[k]));
+            if (now && !fixed_item(now) && now != s_xy[1 - k]) set_xy(k, now);
+        }
+        s_xy_cell[k] = s_xy[k] ? find_cell(c, s_xy[k]) : -1;
+    }
+}
+
+/* The Goriya trades whatever is in the B slot, which in the world is the
+ * sword: show him the Y item instead (the original's B), or X's if he
+ * doesn't take Y's. The next frame's layout puts the sword back, and the
+ * boomerang lands on that button. */
+static bool goriya_takes(uint8_t id) {
+    static const uint8_t no[] = { 0x01, 0x04, 0x03, 0x02, 0x09, 0x0C, 0x05 };  /* as the game lists them */
+    if (!id) return false;
+    for (size_t i = 0; i < sizeof no; i++) if (no[i] == id) return false;
+    return true;
+}
+static int goriya_dispatch(GBContext* c) {
+    if (c->rom_bank != GORIYA_BANK || s_menu_layout || rd(c, W_GAMEPLAY_TYPE) != GAMEPLAY_WORLD) return 0;
+    uint8_t item = 0;
+    if (owned(c, s_xy[1]) && goriya_takes(s_xy[1])) item = s_xy[1];
+    else if (owned(c, s_xy[0]) && goriya_takes(s_xy[0])) item = s_xy[0];
+    if (item) put_in_slot(c, 0, item);
+    return 0;
 }
 
 /* Inventory layout: X item in A, Y item in B. */
@@ -496,6 +533,7 @@ int la_hook_dispatch(GBContext* c, uint16_t addr) {
     switch (addr) {
     case OPEN_DIALOG_TBL0: case OPEN_DIALOG_CLR: return quiet_dialogs(c, addr);
     case DRAW_INV_SLOTS:   case DRAW_RETURN:     return draw_dispatch(c, addr);
+    case GORIYA_STATE1:                          return goriya_dispatch(c);
     default:                                     return xbtn_dispatch(c, addr);
     }
 }

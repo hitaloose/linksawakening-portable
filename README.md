@@ -49,10 +49,6 @@ You supply your own ROM; no game code is distributed here.
 - The save goes to the SD card as soon as the game saves, written atomically.
 
 **Known limits:**
-- **Bomb arrows don't fire from X/Y.** The game needs the bow and the bombs
-  in its two real slots.
-- **The Goriya's boomerang trade refuses the item.** He looks for the item
-  in the sword's slot.
 - **Only one ROM revision works:** *Link's Awakening DX (USA, Europe) (Rev 2)*,
   SHA-1 `1c091225688d966928cc74336dbef2e07d12a47c`. With any other ROM the
   game still runs, but with the original controls.
@@ -101,6 +97,12 @@ those checks:
 - **Toadstool.** The witch and a few other places check the toadstool in a
   real slot together with that slot's button, so its X/Y works differently.
   While held, it takes the sword's slot for real and presses B.
+- **Goriya.** He trades whatever is in the B slot, which in the world is
+  the sword. When his trade routine runs (`$19:4690`), the port puts the Y
+  item in that slot, or the X item if he refuses Y's. The boomerang he gives
+  lands on that same button, and so does your item when you trade back.
+- **Bomb arrows.** Hold the bow's button and the bombs' button together:
+  both extra passes run in the same frame, which is what the game checks for.
 - **MENU.** In the world it holds A+B+Start+Select for 4 frames, the game's
   own save shortcut. On the title and file screens it quits.
 
