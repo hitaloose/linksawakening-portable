@@ -15,7 +15,7 @@ for its console and how to package the result.
 | R / R2 | Shield, while held |
 | L / L2 | Pegasus Boots, while held |
 | X / Y | The two item slots of the original (its A and B) |
-| MENU (SDL *guide*) | Save screen in game; quits on the title screen |
+| MENU (SDL *guide*) | Save screen in game; options screen (colour, scaling, quit) on the title screen |
 
 - In the subscreen, X/Y equip the item under the cursor. The fixed items
   (sword, shield, bracelet, boots) are shown but can't be equipped.

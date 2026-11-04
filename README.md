@@ -31,7 +31,7 @@ You supply your own ROM; no game code is distributed here.
 | R / R2 | Shield, while held |
 | L / L2 | Pegasus Boots, while held |
 | X / Y | The two item slots. On the Game Boy these were A and B. |
-| MENU | Opens the save screen in game; quits to MiaUI on the title screen |
+| MENU | Opens the save screen in game; the options screen on the title screen |
 | Start / Select | Subscreen and map, as in the original |
 
 - In the subscreen, X and Y equip the item under the cursor. The sword,
@@ -104,7 +104,12 @@ those checks:
 - **Bomb arrows.** Hold the bow's button and the bombs' button together:
   both extra passes run in the same frame, which is what the game checks for.
 - **MENU.** In the world it holds A+B+Start+Select for 4 frames, the game's
-  own save shortcut. On the title and file screens it quits.
+  own save shortcut. On the title and file screens it opens the options
+  screen (game and sound paused): COLOR correction (OFF, GBC LCD as the Game
+  Boy Color's screen showed it, or a lighter MODERN), SCREEN (SMOOTH
+  sharp-bilinear or PIXEL nearest), RESUME and QUIT GAME (back to MiaUI).
+  D-pad and A change things, B or MENU closes; the choices are kept in
+  `Saves/LinksAwakening/settings.cfg`.
 
 ### Messages shown once
 
