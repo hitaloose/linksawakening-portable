@@ -112,7 +112,9 @@ those checks:
   sharp-bilinear or PIXEL nearest; pixel perfect needs neither), LCD
   (REFLECTIVE: the GBC screen's backing showing through light pixels, with
   the shadows dark pixels cast on it), GRID (the thin lines between the
-  LCD's pixels), RESUME and QUIT GAME (back to MiaUI).
+  LCD's pixels), MUSIC (CUSTOM plays your own Ogg files in place of the
+  game's tracks, see [docs/MUSIC.md](docs/MUSIC.md)), RESUME and QUIT GAME
+  (back to MiaUI).
   D-pad and A change things, B or MENU closes; the choices are kept in
   `Saves/LinksAwakening/settings.cfg`.
 

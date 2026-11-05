@@ -17,6 +17,8 @@
  *   LCD     OFF / REFLECTIVE   the GBC screen's reflective backing showing
  *                    through light pixels, with their shadows (la_lcd.c)
  *   GRID    OFF / ON  the thin dark lines between the LCD's pixels (la_lcd.c)
+ *   MUSIC   CUSTOM / ORIGINAL   your own music files in place of the game's,
+ *                    for the tracks that have one (la_music.c)
  *   RESUME / QUIT GAME
  *
  * D-pad moves / changes, A changes or picks, B or MENU closes. Choices are
@@ -39,6 +41,7 @@ static int  s_color = LA_COLOR_OFF;
 static int  s_screen;              /* 0 smooth, 1 pixel */
 static int  s_lcd;                 /* 0 off, 1 reflective */
 static int  s_grid;                /* 0 off, 1 on */
+static int  s_music = 1;           /* 0 original, 1 custom (when there are files) */
 enum { ASPECT_PIXEL, ASPECT_KEEP, ASPECT_FULL, ASPECTS };
 static int  s_aspect = ASPECT_KEEP;
 static bool s_loaded, s_open, s_dirty;
@@ -64,6 +67,7 @@ static void cfg_load(void) {
         if (sscanf(line, "aspect=%d", &v) == 1 && v >= 0 && v < ASPECTS) s_aspect = v;
         if (sscanf(line, "lcd=%d", &v) == 1 && v >= 0 && v <= 1) s_lcd = v;
         if (sscanf(line, "grid=%d", &v) == 1 && v >= 0 && v <= 1) s_grid = v;
+        if (sscanf(line, "music=%d", &v) == 1 && v >= 0 && v <= 1) s_music = v;
     }
     fclose(f);
     fprintf(stderr, "[OPTIONS] loaded color=%d screen=%d\n", s_color, s_screen);
@@ -75,7 +79,7 @@ static void cfg_save(void) {
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     FILE* f = fopen(tmp, "w");
     if (!f) { fprintf(stderr, "[OPTIONS] can't write %s\n", tmp); return; }
-    fprintf(f, "color=%d\nscreen=%d\naspect=%d\nlcd=%d\ngrid=%d\n", s_color, s_screen, s_aspect, s_lcd, s_grid);
+    fprintf(f, "color=%d\nscreen=%d\naspect=%d\nlcd=%d\ngrid=%d\nmusic=%d\n", s_color, s_screen, s_aspect, s_lcd, s_grid, s_music);
     fflush(f);
     fclose(f);
     rename(tmp, path);
@@ -129,6 +133,7 @@ void la_settings_apply_color(uint32_t* fb) {
 
 bool la_settings_lcd(void) { cfg_load(); return s_lcd == 1; }
 bool la_settings_grid(void) { cfg_load(); return s_grid == 1; }
+bool la_settings_music(void) { cfg_load(); return s_music == 1; }
 
 bool la_settings_nearest(void) { cfg_load(); return s_screen == 1; }
 
@@ -209,12 +214,13 @@ static void text(uint32_t* fb, int x, int y, const char* s, uint32_t ink) {
 static int text_w(const char* s) { return (int)strlen(s) * 6 - 1; }
 
 /* ---- the screen ----------------------------------------------------------- */
-enum { ITEM_COLOR, ITEM_ASPECT, ITEM_SCREEN, ITEM_LCD, ITEM_GRID, ITEM_RESUME, ITEM_QUIT, ITEM_COUNT };
+enum { ITEM_COLOR, ITEM_ASPECT, ITEM_SCREEN, ITEM_LCD, ITEM_GRID, ITEM_MUSIC, ITEM_RESUME, ITEM_QUIT, ITEM_COUNT };
 static const char* k_aspect_names[ASPECTS] = { "PIXEL PERFECT", "KEEP 10:9", "FULL" };
 static const char* k_color_names[LA_COLOR_COUNT] = { "OFF", "GBC LCD", "MODERN" };
 static const char* k_screen_names[2] = { "SMOOTH", "PIXEL" };
 static const char* k_lcd_names[2] = { "OFF", "REFLECTIVE" };
 static const char* k_onoff[2] = { "OFF", "ON" };
+static const char* k_music_names[2] = { "ORIGINAL", "CUSTOM" };
 
 void la_settings_open(void) {
     cfg_load();
@@ -248,6 +254,9 @@ static void change(int dir) {
     } else if (s_sel == ITEM_GRID) {
         s_grid ^= 1;
         s_dirty = true;
+    } else if (s_sel == ITEM_MUSIC) {
+        s_music ^= 1;
+        s_dirty = true;
     }
 }
 
@@ -274,7 +283,7 @@ bool la_settings_event(const SDL_Event* e) {
 
 void la_settings_draw(uint32_t* fb) {
     if (!s_open || !fb) return;
-    const int x0 = 4, y0 = 14, x1 = 156, y1 = 132;
+    const int x0 = 4, y0 = 10, x1 = 156, y1 = 134;
     for (int y = y0; y < y1; y++)               /* darkened box with a thin frame */
         for (int x = x0; x < x1; x++) {
             uint32_t* p = &fb[y * GBW + x];
@@ -284,9 +293,9 @@ void la_settings_draw(uint32_t* fb) {
     const uint32_t white = 0xFFF8F8F8u, sel = 0xFFF8D030u, dim = 0xFFA0A0A0u;
     text(fb, (GBW - text_w("OPTIONS")) / 2, y0 + 6, "OPTIONS", white);
 
-    static const char* labels[ITEM_COUNT] = { "COLOR", "ASPECT", "SCREEN", "LCD", "GRID", "RESUME", "QUIT GAME" };
+    static const char* labels[ITEM_COUNT] = { "COLOR", "ASPECT", "SCREEN", "LCD", "GRID", "MUSIC", "RESUME", "QUIT GAME" };
     for (int i = 0; i < ITEM_COUNT; i++) {
-        int y = y0 + 22 + i * 13;
+        int y = y0 + 20 + i * 12;
         uint32_t c = i == s_sel ? sel : white;
         if (i == s_sel) text(fb, x0 + 5, y, ">", sel);
         text(fb, x0 + 14, y, labels[i], c);
@@ -294,7 +303,8 @@ void la_settings_draw(uint32_t* fb) {
                       : i == ITEM_ASPECT ? k_aspect_names[s_aspect]
                       : i == ITEM_SCREEN ? k_screen_names[s_screen]
                       : i == ITEM_LCD ? k_lcd_names[s_lcd]
-                      : i == ITEM_GRID ? k_onoff[s_grid] : NULL;
+                      : i == ITEM_GRID ? k_onoff[s_grid]
+                      : i == ITEM_MUSIC ? k_music_names[s_music] : NULL;
         if (v) {                                /* "< VALUE >", centred in its column */
             const int vx0 = 58, vx1 = x1 - 4;
             text(fb, vx0, y, "<", i == s_sel ? sel : dim);
