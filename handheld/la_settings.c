@@ -9,12 +9,16 @@
  *                    channels, softer and darker (Gambatte's formula)
  *           MODERN   a lighter touch: green leans to blue a little, same
  *                    brightness, slightly less saturated
+ *   ASPECT  PIXEL PERFECT  3x, 480x432 on a 640x480 panel (even pixels, no filter)
+ *           KEEP 10:9      the Game Boy's shape, as large as fits (533x480)
+ *           FULL           the whole panel (640x480, stretched)
  *   SCREEN  SMOOTH   sharp-bilinear (even pixels, la_overlay.c)
  *           PIXEL    plain nearest (crisper, pixels of uneven width)
  *   RESUME / QUIT GAME
  *
  * D-pad moves / changes, A changes or picks, B or MENU closes. Choices are
- * kept in $LA_SAVE_DIR/settings.cfg ("color=1" lines).
+ * kept in $LA_SAVE_DIR/settings.cfg ("color=1" lines). ASPECT and SCREEN
+ * change the picture live, behind the box.
  *
  * Everything is drawn into the 160x144 frame before it is scaled, with a
  * 5x7 font of our own, so it looks like part of the game screen.
@@ -30,6 +34,8 @@
 
 static int  s_color = LA_COLOR_OFF;
 static int  s_screen;              /* 0 smooth, 1 pixel */
+enum { ASPECT_PIXEL, ASPECT_KEEP, ASPECT_FULL, ASPECTS };
+static int  s_aspect = ASPECT_KEEP;
 static bool s_loaded, s_open, s_dirty;
 static int  s_sel;
 
@@ -50,6 +56,7 @@ static void cfg_load(void) {
     while (fgets(line, sizeof(line), f)) {
         if (sscanf(line, "color=%d", &v) == 1 && v >= 0 && v < LA_COLOR_COUNT) s_color = v;
         if (sscanf(line, "screen=%d", &v) == 1 && v >= 0 && v <= 1) s_screen = v;
+        if (sscanf(line, "aspect=%d", &v) == 1 && v >= 0 && v < ASPECTS) s_aspect = v;
     }
     fclose(f);
     fprintf(stderr, "[OPTIONS] loaded color=%d screen=%d\n", s_color, s_screen);
@@ -61,7 +68,7 @@ static void cfg_save(void) {
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     FILE* f = fopen(tmp, "w");
     if (!f) { fprintf(stderr, "[OPTIONS] can't write %s\n", tmp); return; }
-    fprintf(f, "color=%d\nscreen=%d\n", s_color, s_screen);
+    fprintf(f, "color=%d\nscreen=%d\naspect=%d\n", s_color, s_screen, s_aspect);
     fflush(f);
     fclose(f);
     rename(tmp, path);
@@ -114,6 +121,22 @@ void la_settings_apply_color(uint32_t* fb) {
 }
 
 bool la_settings_nearest(void) { cfg_load(); return s_screen == 1; }
+
+bool la_settings_plain_scale(void) { cfg_load(); return s_screen == 1 || s_aspect == ASPECT_PIXEL; }
+
+void la_settings_present_rect(int ow, int oh, int* x, int* y, int* w, int* h) {
+    cfg_load();
+    int pw, ph;
+    if (s_aspect == ASPECT_FULL) { pw = ow; ph = oh; }
+    else if (s_aspect == ASPECT_PIXEL) {
+        int k = oh / GBH < ow / GBW ? oh / GBH : ow / GBW;   /* largest whole multiple */
+        if (k < 1) k = 1;
+        pw = GBW * k; ph = GBH * k;
+    } else if (ow * GBH > oh * GBW) { ph = oh; pw = oh * GBW / GBH; }
+    else { pw = ow; ph = ow * GBH / GBW; }
+    *w = pw; *h = ph;
+    *x = (ow - pw) / 2; *y = (oh - ph) / 2;
+}
 
 /* ---- font: 5x7, '#' = ink ------------------------------------------------ */
 typedef struct { char ch; const char* rows[7]; } Glyph;
@@ -176,7 +199,8 @@ static void text(uint32_t* fb, int x, int y, const char* s, uint32_t ink) {
 static int text_w(const char* s) { return (int)strlen(s) * 6 - 1; }
 
 /* ---- the screen ----------------------------------------------------------- */
-enum { ITEM_COLOR, ITEM_SCREEN, ITEM_RESUME, ITEM_QUIT, ITEM_COUNT };
+enum { ITEM_COLOR, ITEM_ASPECT, ITEM_SCREEN, ITEM_RESUME, ITEM_QUIT, ITEM_COUNT };
+static const char* k_aspect_names[ASPECTS] = { "PIXEL PERFECT", "KEEP 10:9", "FULL" };
 static const char* k_color_names[LA_COLOR_COUNT] = { "OFF", "GBC LCD", "MODERN" };
 static const char* k_screen_names[2] = { "SMOOTH", "PIXEL" };
 
@@ -199,6 +223,9 @@ static void close_menu(void) {
 static void change(int dir) {
     if (s_sel == ITEM_COLOR) {
         s_color = (s_color + dir + LA_COLOR_COUNT) % LA_COLOR_COUNT;
+        s_dirty = true;
+    } else if (s_sel == ITEM_ASPECT) {
+        s_aspect = (s_aspect + dir + ASPECTS) % ASPECTS;
         s_dirty = true;
     } else if (s_sel == ITEM_SCREEN) {
         s_screen ^= 1;
@@ -229,7 +256,7 @@ bool la_settings_event(const SDL_Event* e) {
 
 void la_settings_draw(uint32_t* fb) {
     if (!s_open || !fb) return;
-    const int x0 = 8, y0 = 30, x1 = 152, y1 = 118;
+    const int x0 = 4, y0 = 26, x1 = 156, y1 = 120;
     for (int y = y0; y < y1; y++)               /* darkened box with a thin frame */
         for (int x = x0; x < x1; x++) {
             uint32_t* p = &fb[y * GBW + x];
@@ -239,16 +266,17 @@ void la_settings_draw(uint32_t* fb) {
     const uint32_t white = 0xFFF8F8F8u, sel = 0xFFF8D030u, dim = 0xFFA0A0A0u;
     text(fb, (GBW - text_w("OPTIONS")) / 2, y0 + 6, "OPTIONS", white);
 
-    static const char* labels[ITEM_COUNT] = { "COLOR", "SCREEN", "RESUME", "QUIT GAME" };
+    static const char* labels[ITEM_COUNT] = { "COLOR", "ASPECT", "SCREEN", "RESUME", "QUIT GAME" };
     for (int i = 0; i < ITEM_COUNT; i++) {
         int y = y0 + 22 + i * 13;
         uint32_t c = i == s_sel ? sel : white;
         if (i == s_sel) text(fb, x0 + 5, y, ">", sel);
         text(fb, x0 + 14, y, labels[i], c);
         const char* v = i == ITEM_COLOR ? k_color_names[s_color]
+                      : i == ITEM_ASPECT ? k_aspect_names[s_aspect]
                       : i == ITEM_SCREEN ? k_screen_names[s_screen] : NULL;
         if (v) {                                /* "< VALUE >", centred in its column */
-            const int vx0 = 72, vx1 = x1 - 6;
+            const int vx0 = 58, vx1 = x1 - 4;
             text(fb, vx0, y, "<", i == s_sel ? sel : dim);
             text(fb, vx1 - 5, y, ">", i == s_sel ? sel : dim);
             text(fb, vx0 + 6 + (vx1 - vx0 - 11 - text_w(v)) / 2, y, v, c);

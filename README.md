@@ -44,7 +44,8 @@ You supply your own ROM; no game code is distributed here.
 - "You got a Piece of Power!", "You've got a Guardian Acorn!" and "This looks
   pretty heavy" show the first time only. This is kept per save file.
 - The screen is the largest 10:9 picture the panel allows (533×480 on the
-  RG35XX), with sharp-bilinear scaling.
+  RG35XX), with sharp-bilinear scaling; the options screen also has pixel
+  perfect (3×, 480×432) and full screen (640×480).
 - The audio follows the panel's real refresh rate (60.46 Hz), so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
 
@@ -106,8 +107,10 @@ those checks:
 - **MENU.** In the world it holds A+B+Start+Select for 4 frames, the game's
   own save shortcut. On the title and file screens it opens the options
   screen (game and sound paused): COLOR correction (OFF, GBC LCD as the Game
-  Boy Color's screen showed it, or a lighter MODERN), SCREEN (SMOOTH
-  sharp-bilinear or PIXEL nearest), RESUME and QUIT GAME (back to MiaUI).
+  Boy Color's screen showed it, or a lighter MODERN), ASPECT (PIXEL PERFECT
+  3×, KEEP 10:9 as large as fits, or FULL 640×480), SCREEN (SMOOTH
+  sharp-bilinear or PIXEL nearest; pixel perfect needs neither), RESUME and
+  QUIT GAME (back to MiaUI).
   D-pad and A change things, B or MENU closes; the choices are kept in
   `Saves/LinksAwakening/settings.cfg`.
 
@@ -123,8 +126,9 @@ inside the area the game saves, so the setting belongs to each save file.
 ### Screen, audio and saves
 
 - **Screen.** The 160×144 frame is scaled 4× with nearest neighbour into a
-  640×576 render target, then copied linearly to 533×480. Pixels come out
-  even, with only the slight softening of a downscale.
+  640×576 render target, then copied linearly to 533×480 (or 640×480 with
+  ASPECT FULL). Pixels come out even, with only the slight softening of a
+  downscale. ASPECT PIXEL PERFECT draws 3× with plain nearest instead.
 - **Audio.** The game is paced by the panel's vsync, at 60.46 Hz, while the
   Game Boy runs at 59.73 Hz. So the game makes about 1.2% more sound than
   the audio device plays, and samples used to be dropped, which you hear as
