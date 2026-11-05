@@ -46,6 +46,12 @@ You supply your own ROM; no game code is distributed here.
 - The screen is the largest 10:9 picture the panel allows (533×480 on the
   RG35XX), with sharp-bilinear scaling; the options screen also has pixel
   perfect (3×, 480×432) and full screen (640×480).
+- An optional **reflective LCD** look: the Game Boy Color screen's backing
+  showing through the light pixels, with the soft shadow the dark ones cast
+  on it, and an optional **pixel grid**. Both are off by default.
+- **Your own music:** with MUSIC: CUSTOM, Ogg Vorbis files in the pak's
+  `music/` folder play in place of the game's tracks (with loop points), and
+  the sound effects still play over them. See [docs/MUSIC.md](docs/MUSIC.md).
 - The audio follows the panel's real refresh rate (60.46 Hz), so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
 
@@ -133,6 +139,27 @@ inside the area the game saves, so the setting belongs to each save file.
   640×576 render target, then copied linearly to 533×480 (or 640×480 with
   ASPECT FULL). Pixels come out even, with only the slight softening of a
   downscale. ASPECT PIXEL PERFECT draws 3× with plain nearest instead.
+- **LCD and GRID** (`handheld/la_lcd.c`). The GBC's screen has no backlight:
+  light pixels let you see its lilac, grainy backing, and dark pixels cast a
+  shadow on it, a pixel down and to the right. Each frame the port builds
+  how much backing shows through (from each pixel's brightness) and the
+  blurred shadow, then blends them over the picture with plain SDL blend
+  modes, so no shaders are needed and the GPU does the work at panel size.
+  The layers are scaled exactly like the picture, so they line up in every
+  ASPECT and SCREEN mode. The grid is a texture multiplied over the picture;
+  each panel pixel is darkened by how much of it a line covers, so at 3× the
+  lines are crisp and at fractional scales they come out soft instead of
+  uneven. The idea comes from mattakins'
+  [Pixel Transparency](https://github.com/mattakins/Pixel_Transparency)
+  shader; the code is our own.
+- **Custom music** (`handheld/la_music.c`). The port watches the game's
+  current track (`wActiveMusicIndex`, `$D369`). When `music/<track>.ogg`
+  exists, it is decoded with stb_vorbis and mixed into the APU's output,
+  resampled to 44.1 kHz and scaled by the game's master volume, so the
+  game's fades apply to it too. The Game Boy music is silenced channel by
+  channel: channel 2 always, and channels 1, 3 and 4 only while no sound
+  effect is using them (`$D360`, `$D370`, `$D378`). Loop points come from the
+  file's `LOOPSTART` / `LOOPLENGTH` (or `LOOPEND`) comments.
 - **Audio.** The game is paced by the panel's vsync, at 60.46 Hz, while the
   Game Boy runs at 59.73 Hz. So the game makes about 1.2% more sound than
   the audio device plays, and samples used to be dropped, which you hear as
@@ -165,6 +192,11 @@ in MiaUI under Ports.
 
 Saves and a log of the last run are in `Saves/LinksAwakening/` on the card.
 
+For custom music, copy your `.ogg` files to
+`Ports/Links Awakening DX.pak/music/` on the card and pick MUSIC: CUSTOM on
+the options screen. File names and the track table are in
+[docs/MUSIC.md](docs/MUSIC.md).
+
 ## Adding a console
 
 Everything above, except packaging, lives in a shared handheld layer:
@@ -182,11 +214,11 @@ PortMaster and others are welcome.
 ```
 .
 ├── build-miaui.sh    one command: ROM -> MiaUI package
-├── handheld/         shared layer: controls, status bar, dialogs, screen
+├── handheld/         shared layer: controls, status bar, dialogs, screen, options, LCD look, music
 ├── miaui/            MiaUI launcher
 ├── scripts/          handheld.sh (shared build), build_miaui.sh, recomp.sh, upstream targets
 ├── docker/           toolchain images
-├── docs/             HANDHELD.md, and upstream's building and porting notes
+├── docs/             HANDHELD.md, MUSIC.md (track table), and upstream's building and porting notes
 └── LinksAwakening/   submodule: entry point, gen/ (your ROM's code), gbrecomp/ (runtime)
 ```
 
@@ -199,6 +231,8 @@ PortMaster and others are welcome.
   [hitaloose/gb-recompiled](https://github.com/hitaloose/gb-recompiled)
 - Game knowledge: the [LADX-Disassembly](https://github.com/zladx/LADX-Disassembly) contributors
 - [SDL2](https://github.com/libsdl-org/SDL), and the MiaUI / MinUI projects
+- [stb_vorbis](https://github.com/nothings/stb) by Sean Barrett (public domain / MIT), for the custom music
+- The reflective LCD idea: mattakins' [Pixel Transparency](https://github.com/mattakins/Pixel_Transparency)
 
 ## License
 
