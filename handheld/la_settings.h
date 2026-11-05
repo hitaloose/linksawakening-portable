@@ -16,6 +16,10 @@ enum { LA_COLOR_OFF, LA_COLOR_GBC, LA_COLOR_MODERN, LA_COLOR_COUNT };
 void la_settings_apply_color(uint32_t* fb);
 /* Screen option "PIXEL": plain nearest scaling instead of sharp-bilinear. */
 bool la_settings_nearest(void);
+/* LCD option REFLECTIVE: the GBC backing look (la_lcd.c). */
+bool la_settings_lcd(void);
+/* GRID ON: dark lines between the LCD's pixels (la_lcd.c). */
+bool la_settings_grid(void);
 /* Plain nearest scaling: SCREEN PIXEL, or ASPECT PIXEL PERFECT (whole multiples need no filter). */
 bool la_settings_plain_scale(void);
 /* Where the 160x144 picture goes on an ow x oh screen (ASPECT option). */

@@ -71,7 +71,7 @@ void la_overlay_patch_fb(GBContext* ctx, uint32_t* fb) {
 static SDL_Texture* s_target;
 static bool         s_target_failed;
 
-static void snap_out(SDL_Renderer* r) {
+void la_overlay_snap_out(SDL_Renderer* r) {
     if (s_frame % 15 || access("/tmp/la_snap_out", F_OK) != 0) return;
     unlink("/tmp/la_snap_out");
     int w = 640, h = 480;
@@ -120,7 +120,6 @@ bool la_overlay_present(SDL_Renderer* r, SDL_Texture* game, const SDL_Rect* dst)
     SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
     SDL_RenderClear(r);
     SDL_RenderCopy(r, s_target, NULL, dst);
-    snap_out(r);
     return true;
 }
 

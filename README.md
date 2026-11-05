@@ -109,8 +109,10 @@ those checks:
   screen (game and sound paused): COLOR correction (OFF, GBC LCD as the Game
   Boy Color's screen showed it, or a lighter MODERN), ASPECT (PIXEL PERFECT
   3×, KEEP 10:9 as large as fits, or FULL 640×480), SCREEN (SMOOTH
-  sharp-bilinear or PIXEL nearest; pixel perfect needs neither), RESUME and
-  QUIT GAME (back to MiaUI).
+  sharp-bilinear or PIXEL nearest; pixel perfect needs neither), LCD
+  (REFLECTIVE: the GBC screen's backing showing through light pixels, with
+  the shadows dark pixels cast on it), GRID (the thin lines between the
+  LCD's pixels), RESUME and QUIT GAME (back to MiaUI).
   D-pad and A change things, B or MENU closes; the choices are kept in
   `Saves/LinksAwakening/settings.cfg`.
 

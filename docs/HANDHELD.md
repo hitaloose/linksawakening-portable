@@ -26,7 +26,9 @@ for its console and how to package the result.
 - "You got a Piece of Power", "Guardian Acorn" and "This looks pretty heavy"
   show once per save file.
 - The screen is drawn at the largest 10:9 size the panel allows, sharp-bilinear
-  (the options screen's ASPECT also offers pixel perfect and full panel).
+  (the options screen's ASPECT also offers pixel perfect and full panel;
+  LCD REFLECTIVE and GRID give it the Game Boy Color screen's look,
+  `handheld/la_lcd.c`).
 - Audio is resampled to the panel's refresh rate, so it doesn't pop.
 - The battery save is written to disk, atomically, right after the game saves.
 
