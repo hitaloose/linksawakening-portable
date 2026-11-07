@@ -57,8 +57,8 @@ You supply your own ROM; no game code is distributed here.
   in the pak's `music/` folder play in place of the game's tracks (with loop
   points), and `music/sfx/` in place of its sound effects; anything without
   a file keeps the Game Boy sound. See [docs/MUSIC.md](docs/MUSIC.md).
-- The audio follows the panel's real refresh rate, measured while the game
-  runs (it differs per unit: 60.46 and 59.96 Hz were seen), so it doesn't pop.
+- The audio follows the panel's real refresh rate (60.46 Hz on the RG35XX),
+  measured while the game runs, so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
 
 **Known limits:**
@@ -174,12 +174,11 @@ inside the area the game saves, so the setting belongs to each save file.
   set; `music/sfx/<j|w|n>_<id>.ogg` is decoded once, kept in memory and
   mixed in, and the Game Boy effect's channel is silenced while it would
   have played.
-- **Audio.** The game is paced by the panel's vsync, around 60 Hz but not
-  the same on every unit (60.46 and 59.96 Hz were measured), while the Game
-  Boy runs at 59.73 Hz. So the game makes up to 1.2% more sound than the
-  audio device plays, and samples used to be dropped, which you hear as
-  pops. Now the time between frames is measured while the game runs (in
-  vsync periods, over ~2 s windows) and the audio is resampled by
+- **Audio.** The game is paced by the panel's vsync, at 60.46 Hz on the
+  RG35XX, while the Game Boy runs at 59.73 Hz. So the game makes about 1.2%
+  more sound than the audio device plays, and samples used to be dropped,
+  which you hear as pops. Now the panel rate is measured while the game runs
+  (vsync periods over ~2 s windows) and the audio is resampled by
   59.73/measured rate, nudged by how full the buffer is, so the buffer stays
   half full.
 - **Saves.** The runtime used to copy the cartridge RAM to disk every
