@@ -23,8 +23,9 @@ for its console and how to package the result.
 - The X/Y choice is kept per save file in `$LA_SAVE_DIR/xy_slot<n>.cfg`.
 
 **Quality of life:**
-- "You got a Piece of Power", "Guardian Acorn" and "This looks pretty heavy"
-  show once per save file.
+- "You got a Piece of Power", "Guardian Acorn", "Secret Seashell", "Small
+  Key" and the rock messages ("pretty heavy", "many cracks", "weird object",
+  "key hole") show once per save file.
 - The screen is drawn at the largest 10:9 size the panel allows, sharp-bilinear
   (the options screen's ASPECT also offers pixel perfect and full panel;
   LCD REFLECTIVE and GRID give it the Game Boy Color screen's look,

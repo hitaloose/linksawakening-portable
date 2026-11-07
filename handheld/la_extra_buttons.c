@@ -31,11 +31,14 @@
  * X/Y are remembered per save file in $LA_SAVE_DIR/xy_slot<n>.cfg.
  *
  * Also here, because they use the same dispatcher hooks:
- *  - Quieter dialogs: "You got a Piece of Power!" and "You've got a Guardian
- *    Acorn!" show the first time only, and "This looks pretty heavy" (rock,
- *    no Power Bracelet in a slot) shows once. What was already shown is kept
- *    in $DB59, the unused third byte of the death counter, inside the save
- *    data, so it follows each save file.
+ *  - Quieter dialogs, shown the first time only: "You got a Piece of Power!",
+ *    "You've got a Guardian Acorn!", "You found a Secret Seashell!", "You got
+ *    a Small Key!", and the ones for touching a rock: "This looks pretty
+ *    heavy" (no Power Bracelet in a slot), "This rock has many cracks"
+ *    (bombable block), "What a weird object" (the crystals broken with the
+ *    Pegasus Boots) and "This rock has a key hole". What was already shown is
+ *    kept in $DB59, the unused third byte of the death counter, inside the
+ *    save data, so it follows each save file.
  *  - MENU: in the world it holds A+B+Start+Select for a few frames, which
  *    opens the game's own save screen; on the title and file screens it opens
  *    the options screen (la_settings.c), which has QUIT GAME.
@@ -46,6 +49,7 @@
  */
 #include "gbrt.h"
 #include "la_extra_buttons.h"
+#include "la_music.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +71,11 @@
 #define DIALOG_PIECE_OF_POWER 0x08
 #define DIALOG_ACORN          0xEC
 #define DIALOG_HEAVY_ROCK     0x8D
+#define DIALOG_CRACKED_ROCK   0x8A  /* "This rock has many cracks" (bombable block) */
+#define DIALOG_WEIRD_OBJECT   0x8B  /* "What a weird object" (crystal, Pegasus Boots) */
+#define DIALOG_KEYHOLE_BLOCK  0x8C  /* "This rock has a key hole" */
+#define DIALOG_SMALL_KEY      0xAA  /* chests */
+#define DIALOG_SEASHELL       0xEF  /* pickups, chests, the mansion's garden */
 
 /* WRAM ($Dxxx lives in bank 1 during gameplay) */
 #define W_INV_B            0xDB00  /* wInventoryItems: B, A, then the 10 subscreen cells */
@@ -86,6 +95,11 @@
 #define SEEN_POWER  0x01
 #define SEEN_ACORN  0x02
 #define SEEN_ROCK   0x04
+#define SEEN_SEASHELL 0x08
+#define SEEN_CRACKED  0x10
+#define SEEN_WEIRD    0x20
+#define SEEN_KEYHOLE  0x40
+#define SEEN_SMALL_KEY 0x80
 
 #define J_A 0x10
 #define J_B 0x20
@@ -515,12 +529,22 @@ static int draw_dispatch(GBContext* c, uint16_t addr) {
 /* ---- dialogs shown once per save file ------------------------------------ */
 static int quiet_dialogs(GBContext* c, uint16_t addr) {
     uint8_t bit = 0;
-    if (addr == OPEN_DIALOG_TBL0 && stack16(c, 0) == GOT_ITEM_DIALOG_RET) {
-        if (c->a == DIALOG_PIECE_OF_POWER) bit = SEEN_POWER;
-        else if (c->a == DIALOG_ACORN)     bit = SEEN_ACORN;
-    } else if (addr == OPEN_DIALOG_CLR && c->rom_bank == 2 && stack16(c, 0) == ROCK_DIALOG_RET &&
-               c->a == DIALOG_HEAVY_ROCK) {
-        bit = SEEN_ROCK;
+    if (addr == OPEN_DIALOG_TBL0) {
+        /* these two only from ApplyGotItem; the seashell and small key texts
+         * are only used for those items, wherever they are opened from */
+        bool got_item = stack16(c, 0) == GOT_ITEM_DIALOG_RET;
+        if (got_item && c->a == DIALOG_PIECE_OF_POWER) bit = SEEN_POWER;
+        else if (got_item && c->a == DIALOG_ACORN)     bit = SEEN_ACORN;
+        else if (c->a == DIALOG_SEASHELL)              bit = SEEN_SEASHELL;
+        else if (c->a == DIALOG_SMALL_KEY)             bit = SEEN_SMALL_KEY;
+    } else if (addr == OPEN_DIALOG_CLR && c->rom_bank == 2 && stack16(c, 0) == ROCK_DIALOG_RET) {
+        /* the "touching a rock" messages all share this call */
+        switch (c->a) {
+        case DIALOG_HEAVY_ROCK:    bit = SEEN_ROCK;    break;
+        case DIALOG_CRACKED_ROCK:  bit = SEEN_CRACKED; break;
+        case DIALOG_WEIRD_OBJECT:  bit = SEEN_WEIRD;   break;
+        case DIALOG_KEYHOLE_BLOCK: bit = SEEN_KEYHOLE; break;
+        }
     }
     if (!bit) return 0;
     uint8_t seen = rd(c, W_SEEN_DIALOGS);
@@ -535,6 +559,9 @@ int la_hook_dispatch(GBContext* c, uint16_t addr) {
     case OPEN_DIALOG_TBL0: case OPEN_DIALOG_CLR: return quiet_dialogs(c, addr);
     case DRAW_INV_SLOTS:   case DRAW_RETURN:     return draw_dispatch(c, addr);
     case GORIYA_STATE1:                          return goriya_dispatch(c);
+    case LA_MUSIC_HOOK_PLAY_SFX: case LA_MUSIC_HOOK_PLAY_SFX2:
+        if (c->rom_bank == LA_MUSIC_HOOK_BANK) return la_music_sfx_hook(c, addr);
+        return 0;
     default:                                     return xbtn_dispatch(c, addr);
     }
 }

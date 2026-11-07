@@ -41,17 +41,22 @@ You supply your own ROM; no game code is distributed here.
 - What's on X and Y is remembered for each save file.
 
 **Quality of life:**
-- "You got a Piece of Power!", "You've got a Guardian Acorn!" and "This looks
-  pretty heavy" show the first time only. This is kept per save file.
+- Messages that repeat show the first time only: "You got a Piece of Power!",
+  "You've got a Guardian Acorn!", "You found a Secret Seashell!", "You got a
+  Small Key!", and the ones for touching a rock: "This looks pretty heavy",
+  "This rock has many cracks", "What a weird object" (the crystals the
+  Pegasus Boots break) and "This rock has a key hole". This is kept per save
+  file.
 - The screen is the largest 10:9 picture the panel allows (533×480 on the
   RG35XX), with sharp-bilinear scaling; the options screen also has pixel
   perfect (3×, 480×432) and full screen (640×480).
 - An optional **reflective LCD** look: the Game Boy Color screen's backing
   showing through the light pixels, with the soft shadow the dark ones cast
   on it, and an optional **pixel grid**. Both are off by default.
-- **Your own music:** with MUSIC: CUSTOM, Ogg Vorbis files in the pak's
-  `music/` folder play in place of the game's tracks (with loop points), and
-  the sound effects still play over them. See [docs/MUSIC.md](docs/MUSIC.md).
+- **Your own music and sound effects:** with MUSIC: CUSTOM, Ogg Vorbis files
+  in the pak's `music/` folder play in place of the game's tracks (with loop
+  points), and `music/sfx/` in place of its sound effects; anything without
+  a file keeps the Game Boy sound. See [docs/MUSIC.md](docs/MUSIC.md).
 - The audio follows the panel's real refresh rate, measured while the game
   runs (it differs per unit: 60.46 and 59.96 Hz were seen), so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
@@ -127,9 +132,12 @@ those checks:
 
 ### Messages shown once
 
-Dialogs open through `OpenDialogInTable0` (`$237C`) and, for the heavy rock,
-bank 2's `$7543`. The port recognises the Piece of Power, Guardian Acorn and
-heavy rock calls by their return address and dialog number. The second time,
+Dialogs open through `OpenDialogInTable0` (`$237C`) and, for the rocks,
+bank 2's `$7543`. The port recognises the Piece of Power and Guardian Acorn
+calls by their return address (ApplyGotItem) and dialog number, the seashell
+(`$EF`) and small key (`$AA`) texts by their number alone (only those items
+use them), and the four rock texts (`$8A`-`$8D`) by the one call they share
+in bank 2 and their number. The second time,
 it returns from the routine without opening the box. What was already shown
 is kept in `$DB59`, an unused byte of the death counter. That byte lies
 inside the area the game saves, so the setting belongs to each save file.
@@ -158,9 +166,14 @@ inside the area the game saves, so the setting belongs to each save file.
   exists, it is decoded with stb_vorbis and mixed into the APU's output,
   resampled to 44.1 kHz and scaled by the game's master volume, so the
   game's fades apply to it too. The Game Boy music is silenced channel by
-  channel: channel 2 always, and channels 1, 3 and 4 only while no sound
-  effect is using them (`$D360`, `$D370`, `$D378`). Loop points come from the
-  file's `LOOPSTART` / `LOOPLENGTH` (or `LOOPEND`) comments.
+  channel, except the channels a sound effect is using right now (`$D361`,
+  `$D371`, `$D379` hold the jingle, wave and noise effect playing). Loop
+  points come from the file's `LOOPSTART` / `LOOPLENGTH` (or `LOOPEND`)
+  comments. Sound effects are caught in the driver's PlaySfx (bank `$1F`,
+  `$4006`), where this frame's requests (`$D360`, `$D370`, `$D378`) are still
+  set; `music/sfx/<j|w|n>_<id>.ogg` is decoded once, kept in memory and
+  mixed in, and the Game Boy effect's channel is silenced while it would
+  have played.
 - **Audio.** The game is paced by the panel's vsync, around 60 Hz but not
   the same on every unit (60.46 and 59.96 Hz were measured), while the Game
   Boy runs at 59.73 Hz. So the game makes up to 1.2% more sound than the
@@ -198,8 +211,9 @@ Saves and a log of the last run are in `Saves/LinksAwakening/` on the card.
 
 For custom music, copy your `.ogg` files to
 `Ports/Links Awakening DX.pak/music/` on the card and pick MUSIC: CUSTOM on
-the options screen. File names and the track table are in
-[docs/MUSIC.md](docs/MUSIC.md).
+the options screen. File names, the track table and a script that builds the
+whole pack from your own copy of the Switch version's audio and the original
+soundtrack are in [docs/MUSIC.md](docs/MUSIC.md).
 
 ## Adding a console
 
