@@ -52,7 +52,8 @@ You supply your own ROM; no game code is distributed here.
 - **Your own music:** with MUSIC: CUSTOM, Ogg Vorbis files in the pak's
   `music/` folder play in place of the game's tracks (with loop points), and
   the sound effects still play over them. See [docs/MUSIC.md](docs/MUSIC.md).
-- The audio follows the panel's real refresh rate (60.46 Hz), so it doesn't pop.
+- The audio follows the panel's real refresh rate, measured while the game
+  runs (it differs per unit: 60.46 and 59.96 Hz were seen), so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
 
 **Known limits:**
@@ -160,11 +161,14 @@ inside the area the game saves, so the setting belongs to each save file.
   channel: channel 2 always, and channels 1, 3 and 4 only while no sound
   effect is using them (`$D360`, `$D370`, `$D378`). Loop points come from the
   file's `LOOPSTART` / `LOOPLENGTH` (or `LOOPEND`) comments.
-- **Audio.** The game is paced by the panel's vsync, at 60.46 Hz, while the
-  Game Boy runs at 59.73 Hz. So the game makes about 1.2% more sound than
-  the audio device plays, and samples used to be dropped, which you hear as
-  pops. Now the audio is resampled by 59.73/60.46, nudged by how full the
-  buffer is, so the buffer stays half full.
+- **Audio.** The game is paced by the panel's vsync, around 60 Hz but not
+  the same on every unit (60.46 and 59.96 Hz were measured), while the Game
+  Boy runs at 59.73 Hz. So the game makes up to 1.2% more sound than the
+  audio device plays, and samples used to be dropped, which you hear as
+  pops. Now the time between frames is measured while the game runs (in
+  vsync periods, over ~2 s windows) and the audio is resampled by
+  59.73/measured rate, nudged by how full the buffer is, so the buffer stays
+  half full.
 - **Saves.** The runtime used to copy the cartridge RAM to disk every
   5 seconds, and skipped the copy on exit while the game had that RAM
   locked. The game locks it right after every save, so a quick "save & quit"

@@ -62,7 +62,7 @@ Take MiaUI as the model. A target `foo` is four files:
 In `TARGET_DEFS`:
 
 - `-DGBRT_PLATFORM_FOO`: optional, for anything only that console needs.
-- `-DGBRT_DISPLAY_HZ=<panel Hz>`: measure it, because the audio rate follows it.
+- `-DGBRT_DISPLAY_HZ=<panel Hz>`: optional first guess (default 60). The real rate is measured while the game runs and the audio follows it.
 - `-DGBRT_SCREEN_W=` and `-DGBRT_SCREEN_H=`: the panel size.
 
 Things to check on the console:

@@ -8,8 +8,8 @@
 #
 # The game layer is shared with every handheld target (scripts/handheld.sh,
 # handheld/); this file only has what's MiaUI's: the compiler (Debian bookworm
-# armhf, glibc 2.36, links against the libSDL2 already on MiaUI), the panel
-# rate, and the .pak layout.
+# armhf, glibc 2.36, links against the libSDL2 already on MiaUI) and the
+# .pak layout.
 #
 # Output: "<out>/Links Awakening DX.pak/" (copy into Ports/ on the SD card) and a zip of it.
 set -e
@@ -19,7 +19,7 @@ OUT="${1:-$ROOT/build-miaui}"
 CC=arm-linux-gnueabihf-gcc
 CXX=arm-linux-gnueabihf-g++
 ARCH="-marm -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard"
-TARGET_DEFS="-DGBRT_PLATFORM_MIAUI -DGBRT_DISPLAY_HZ=60.46 -DGBRT_SCREEN_W=640 -DGBRT_SCREEN_H=480"
+TARGET_DEFS="-DGBRT_PLATFORM_MIAUI -DGBRT_SCREEN_W=640 -DGBRT_SCREEN_H=480"
 TARGET_INC="-I/usr/include/SDL2 -I/usr/include/arm-linux-gnueabihf/SDL2"
 TARGET_LIBS="-lSDL2"
 handheld_build "$OUT"
