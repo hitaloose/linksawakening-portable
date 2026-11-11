@@ -53,6 +53,9 @@ You supply your own ROM; no game code is distributed here.
 - An optional **reflective LCD** look: the Game Boy Color screen's backing
   showing through the light pixels, with the soft shadow the dark ones cast
   on it, and an optional **pixel grid**. Both are off by default.
+- Optional **screen overlays**: GRID also offers two Game Boy Color bezels
+  with their own pixel grid (mugwomp93's and drkhrse's "perfect overlays"),
+  and any PNG you put in `Saves/LinksAwakening/overlays/`.
 - The audio follows the panel's real refresh rate (60.46 Hz on the RG35XX),
   measured while the game runs, so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
@@ -119,8 +122,9 @@ those checks:
   3×, KEEP 10:9 as large as fits, or FULL 640×480), SCREEN (SMOOTH
   sharp-bilinear or PIXEL nearest; pixel perfect needs neither), LCD
   (REFLECTIVE: the GBC screen's backing showing through light pixels, with
-  the shadows dark pixels cast on it), GRID (the thin lines between the
-  LCD's pixels), RESUME and QUIT GAME (back to MiaUI).
+  the shadows dark pixels cast on it), GRID (OFF, ON: the thin lines between
+  the LCD's pixels, then one value per screen overlay), RESUME and QUIT GAME
+  (back to MiaUI).
   D-pad and A change things, B or MENU closes; the choices are kept in
   `Saves/LinksAwakening/settings.cfg`.
 
@@ -155,6 +159,17 @@ inside the area the game saves, so the setting belongs to each save file.
   uneven. The idea comes from mattakins'
   [Pixel Transparency](https://github.com/mattakins/Pixel_Transparency)
   shader; the code is our own.
+- **Screen overlays** (`handheld/la_bezel.c`). PNGs from the package's
+  `overlays/` and from `Saves/LinksAwakening/overlays/` are extra GRID
+  values. The PNG is drawn 1:1 over everything, centred (scaled down if it
+  is bigger than the panel), and the picture goes in its transparent hole,
+  measured from the image: from the centre, the run of columns and rows
+  that have a see-through pixel. No RetroArch `.cfg` is read, and
+  ASPECT is greyed out while an overlay is on. Credits in
+  `handheld/overlays/CREDITS.md`. The two GBC bezels are not in this
+  repository: the build downloads them from their original repository
+  (`scripts/fetch_overlays.sh`, fixed commit, SHA-256 checked), like the
+  ROM, each build gets its own copy.
 - **Audio.** The game is paced by the panel's vsync, at 60.46 Hz on the
   RG35XX, while the Game Boy runs at 59.73 Hz. So the game makes about 1.2%
   more sound than the audio device plays, and samples used to be dropped,
@@ -224,6 +239,10 @@ PortMaster and others are welcome.
 - Game knowledge: the [LADX-Disassembly](https://github.com/zladx/LADX-Disassembly) contributors
 - [SDL2](https://github.com/libsdl-org/SDL), and the MiaUI / MinUI projects
 - The reflective LCD idea: mattakins' [Pixel Transparency](https://github.com/mattakins/Pixel_Transparency)
+- Screen overlays: [ourigen/perfect_overlays](https://github.com/ourigen/perfect_overlays),
+  bezels by mugwomp93 and [drkhrse](https://github.com/drkhrse/drkhrse_miyoo_bezels),
+  based on 1playerinsertcoin's work
+- PNG loading: [stb_image](https://github.com/nothings/stb) (public domain)
 
 ## License
 

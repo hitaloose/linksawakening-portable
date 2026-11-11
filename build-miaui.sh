@@ -41,6 +41,9 @@ else
     docker run --rm -v "$REPO:/src" -v "$ROMDIR:/rom:ro" "$IMAGE" bash /src/scripts/recomp.sh
 fi
 
+echo '== Screen overlays (from ourigen/perfect_overlays)'
+scripts/fetch_overlays.sh
+
 echo "== Build ($TARGET)"
 docker run --rm -v "$REPO:/src" "$IMAGE" bash "/src/scripts/build_$TARGET.sh" "/src/build-$TARGET"
 

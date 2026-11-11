@@ -29,7 +29,11 @@ for its console and how to package the result.
 - The screen is drawn at the largest 10:9 size the panel allows, sharp-bilinear
   (the options screen's ASPECT also offers pixel perfect and full panel;
   LCD REFLECTIVE and GRID give it the Game Boy Color screen's look,
-  `handheld/la_lcd.c`).
+  `handheld/la_lcd.c`). GRID also lists screen overlay PNGs, a bezel
+  around a transparent hole the picture is fitted into (`handheld/la_bezel.c`):
+  the package's `overlays/` and `$LA_SAVE_DIR/overlays/`. A target runs
+  `scripts/fetch_overlays.sh` on the host (it downloads the bundled ones,
+  never committed) and copies `handheld/overlays/` next to its `.elf`.
 - Audio is resampled to the panel's refresh rate, so it doesn't pop.
 - The battery save is written to disk, atomically, right after the game saves.
 

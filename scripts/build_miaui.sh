@@ -29,6 +29,9 @@ PAK="$OUT/$PAK_NAME"
 mkdir -p "$PAK"
 cp "$OUT/obj/linksawakening.elf" "$PAK/"
 cp "$ROOT/miaui/launch.sh" "$PAK/"
+rm -rf "$PAK/overlays" && mkdir -p "$PAK/overlays"
+cp "$ROOT/handheld/overlays/CREDITS.md" "$PAK/overlays/"
+cp "$ROOT"/handheld/overlays/*.png "$PAK/overlays/" 2>/dev/null || echo '  (no screen overlays: scripts/fetch_overlays.sh)'
 chmod +x "$PAK/launch.sh" "$PAK/linksawakening.elf"
 ( cd "$OUT" && rm -f linksawakening-miaui.zip && mkdir -p zip/Ports && rm -rf "zip/Ports/$PAK_NAME" && cp -r "$PAK_NAME" zip/Ports/ && cd zip && zip -qr ../linksawakening-miaui.zip Ports )
 

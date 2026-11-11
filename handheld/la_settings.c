@@ -17,16 +17,21 @@
  *   LCD     OFF / REFLECTIVE   the GBC screen's reflective backing showing
  *                    through light pixels, with their shadows (la_lcd.c)
  *   GRID    OFF / ON  the thin dark lines between the LCD's pixels (la_lcd.c)
+ *           then one value per screen overlay PNG (la_bezel.c): a bezel
+ *                    with its own grid; the picture goes in its hole and
+ *                    ASPECT is left aside (shown greyed)
  *   RESUME / QUIT GAME
  *
  * D-pad moves / changes, A changes or picks, B or MENU closes. Choices are
- * kept in $LA_SAVE_DIR/settings.cfg ("color=1" lines). ASPECT and SCREEN
+ * kept in $LA_SAVE_DIR/settings.cfg ("color=1" lines; an overlay is kept by
+ * file name, "grid_overlay=GBC_Mugwomp.png"). ASPECT and SCREEN
  * change the picture live, behind the box.
  *
  * Everything is drawn into the 160x144 frame before it is scaled, with a
  * 5x7 font of our own, so it looks like part of the game screen.
  */
 #include "la_settings.h"
+#include "la_bezel.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +43,7 @@
 static int  s_color = LA_COLOR_OFF;
 static int  s_screen;              /* 0 smooth, 1 pixel */
 static int  s_lcd;                 /* 0 off, 1 reflective */
-static int  s_grid;                /* 0 off, 1 on */
+static int  s_grid;                /* 0 off, 1 on, 2 + i: overlay i (la_bezel.c) */
 enum { ASPECT_PIXEL, ASPECT_KEEP, ASPECT_FULL, ASPECTS };
 static int  s_aspect = ASPECT_KEEP;
 static bool s_loaded, s_open, s_dirty;
@@ -64,6 +69,12 @@ static void cfg_load(void) {
         if (sscanf(line, "aspect=%d", &v) == 1 && v >= 0 && v < ASPECTS) s_aspect = v;
         if (sscanf(line, "lcd=%d", &v) == 1 && v >= 0 && v <= 1) s_lcd = v;
         if (sscanf(line, "grid=%d", &v) == 1 && v >= 0 && v <= 1) s_grid = v;
+        if (strncmp(line, "grid_overlay=", 13) == 0) {
+            line[strcspn(line, "\r\n")] = 0;
+            int i = la_bezel_find(line + 13);
+            if (i >= 0 && la_bezel_select(i)) s_grid = 2 + i;
+            else fprintf(stderr, "[OPTIONS] overlay %s not found\n", line + 13);
+        }
     }
     fclose(f);
     fprintf(stderr, "[OPTIONS] loaded color=%d screen=%d\n", s_color, s_screen);
@@ -75,7 +86,8 @@ static void cfg_save(void) {
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
     FILE* f = fopen(tmp, "w");
     if (!f) { fprintf(stderr, "[OPTIONS] can't write %s\n", tmp); return; }
-    fprintf(f, "color=%d\nscreen=%d\naspect=%d\nlcd=%d\ngrid=%d\n", s_color, s_screen, s_aspect, s_lcd, s_grid);
+    fprintf(f, "color=%d\nscreen=%d\naspect=%d\nlcd=%d\ngrid=%d\n", s_color, s_screen, s_aspect, s_lcd, s_grid == 1);
+    if (s_grid >= 2) fprintf(f, "grid_overlay=%s\n", la_bezel_file(s_grid - 2));
     fflush(f);
     fclose(f);
     rename(tmp, path);
@@ -130,12 +142,15 @@ void la_settings_apply_color(uint32_t* fb) {
 bool la_settings_lcd(void) { cfg_load(); return s_lcd == 1; }
 bool la_settings_grid(void) { cfg_load(); return s_grid == 1; }
 
+static bool bezel_on(void) { return s_grid >= 2; }
+
 bool la_settings_nearest(void) { cfg_load(); return s_screen == 1; }
 
 bool la_settings_plain_scale(void) { cfg_load(); return s_screen == 1 || s_aspect == ASPECT_PIXEL; }
 
 void la_settings_present_rect(int ow, int oh, int* x, int* y, int* w, int* h) {
     cfg_load();
+    if (bezel_on() && la_bezel_rect(ow, oh, x, y, w, h)) return;
     int pw, ph;
     if (s_aspect == ASPECT_FULL) { pw = ow; ph = oh; }
     else if (s_aspect == ASPECT_PIXEL) {
@@ -180,6 +195,17 @@ static const Glyph k_font[] = {
     {'<', {"...#.", "..#..", ".#...", "#....", ".#...", "..#..", "...#."}},
     {'>', {".#...", "..#..", "...#.", "....#", "...#.", "..#..", ".#..."}},
     {':', {".....", "..#..", "..#..", ".....", "..#..", "..#..", "....."}},
+    {'-', {".....", ".....", ".....", "#####", ".....", ".....", "....."}},
+    {'0', {".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."}},
+    {'1', {"..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."}},
+    {'2', {".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"}},
+    {'3', {"####.", "....#", "....#", ".###.", "....#", "....#", "####."}},
+    {'4', {"...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."}},
+    {'5', {"#####", "#....", "####.", "....#", "....#", "#...#", ".###."}},
+    {'6', {".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."}},
+    {'7', {"#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."}},
+    {'8', {".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."}},
+    {'9', {".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."}},
 };
 
 static const Glyph* glyph(char c) {
@@ -237,6 +263,7 @@ static void change(int dir) {
         s_color = (s_color + dir + LA_COLOR_COUNT) % LA_COLOR_COUNT;
         s_dirty = true;
     } else if (s_sel == ITEM_ASPECT) {
+        if (bezel_on()) return;                 /* the overlay places the picture */
         s_aspect = (s_aspect + dir + ASPECTS) % ASPECTS;
         s_dirty = true;
     } else if (s_sel == ITEM_SCREEN) {
@@ -246,7 +273,12 @@ static void change(int dir) {
         s_lcd ^= 1;
         s_dirty = true;
     } else if (s_sel == ITEM_GRID) {
-        s_grid ^= 1;
+        /* OFF, ON, then the overlays; skip one that fails to load */
+        int n = 2 + la_bezel_count();
+        for (int tries = 0; tries < n; tries++) {
+            s_grid = (s_grid + dir + n) % n;
+            if (la_bezel_select(s_grid >= 2 ? s_grid - 2 : -1)) break;
+        }
         s_dirty = true;
     }
 }
@@ -294,12 +326,16 @@ void la_settings_draw(uint32_t* fb) {
                       : i == ITEM_ASPECT ? k_aspect_names[s_aspect]
                       : i == ITEM_SCREEN ? k_screen_names[s_screen]
                       : i == ITEM_LCD ? k_lcd_names[s_lcd]
-                      : i == ITEM_GRID ? k_onoff[s_grid] : NULL;
+                      : i == ITEM_GRID ? (s_grid < 2 ? k_onoff[s_grid] : la_bezel_name(s_grid - 2)) : NULL;
+        char vbuf[14];
         if (v) {                                /* "< VALUE >", centred in its column */
             const int vx0 = 58, vx1 = x1 - 4;
-            text(fb, vx0, y, "<", i == s_sel ? sel : dim);
-            text(fb, vx1 - 5, y, ">", i == s_sel ? sel : dim);
-            text(fb, vx0 + 6 + (vx1 - vx0 - 11 - text_w(v)) / 2, y, v, c);
+            snprintf(vbuf, sizeof(vbuf), "%s", v);   /* at most 13 characters fit */
+            bool off = i == ITEM_ASPECT && bezel_on();
+            uint32_t vc = off ? dim : c;
+            text(fb, vx0, y, "<", off ? dim : i == s_sel ? sel : dim);
+            text(fb, vx1 - 5, y, ">", off ? dim : i == s_sel ? sel : dim);
+            text(fb, vx0 + 6 + (vx1 - vx0 - 11 - text_w(vbuf)) / 2, y, vbuf, vc);
         }
     }
 }

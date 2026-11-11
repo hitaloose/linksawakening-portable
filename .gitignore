@@ -84,3 +84,4 @@ build-logs/
 build-tools/
 setup.log
 * (recomp).*
+# handheld/overlays/*.png are downloaded by scripts/fetch_overlays.sh, never committed

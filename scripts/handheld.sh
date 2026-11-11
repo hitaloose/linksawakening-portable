@@ -47,6 +47,7 @@ handheld_build() {
     cc1  "$ROOT/handheld/la_overlay.c" la_overlay.o
     cc1  "$ROOT/handheld/la_settings.c" la_settings.o
     cc1  "$ROOT/handheld/la_lcd.c" la_lcd.o
+    cc1  "$ROOT/handheld/la_bezel.c" la_bezel.o
 
     echo '[2/4] Entry point + ROM data'
     cc1 "$LA/rom_main.c" rom_main.o
