@@ -20,8 +20,6 @@ bool la_settings_nearest(void);
 bool la_settings_lcd(void);
 /* GRID ON: dark lines between the LCD's pixels (la_lcd.c). */
 bool la_settings_grid(void);
-/* MUSIC CUSTOM: replacement music files where there are some (la_music.c). */
-bool la_settings_music(void);
 /* Plain nearest scaling: SCREEN PIXEL, or ASPECT PIXEL PERFECT (whole multiples need no filter). */
 bool la_settings_plain_scale(void);
 /* Where the 160x144 picture goes on an ow x oh screen (ASPECT option). */

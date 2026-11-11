@@ -49,7 +49,6 @@
  */
 #include "gbrt.h"
 #include "la_extra_buttons.h"
-#include "la_music.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -559,9 +558,6 @@ int la_hook_dispatch(GBContext* c, uint16_t addr) {
     case OPEN_DIALOG_TBL0: case OPEN_DIALOG_CLR: return quiet_dialogs(c, addr);
     case DRAW_INV_SLOTS:   case DRAW_RETURN:     return draw_dispatch(c, addr);
     case GORIYA_STATE1:                          return goriya_dispatch(c);
-    case LA_MUSIC_HOOK_PLAY_SFX: case LA_MUSIC_HOOK_PLAY_SFX2:
-        if (c->rom_bank == LA_MUSIC_HOOK_BANK) return la_music_sfx_hook(c, addr);
-        return 0;
     default:                                     return xbtn_dispatch(c, addr);
     }
 }

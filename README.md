@@ -53,10 +53,6 @@ You supply your own ROM; no game code is distributed here.
 - An optional **reflective LCD** look: the Game Boy Color screen's backing
   showing through the light pixels, with the soft shadow the dark ones cast
   on it, and an optional **pixel grid**. Both are off by default.
-- **Your own music and sound effects:** with MUSIC: CUSTOM, Ogg Vorbis files
-  in the pak's `music/` folder play in place of the game's tracks (with loop
-  points), and `music/sfx/` in place of its sound effects; anything without
-  a file keeps the Game Boy sound. See [docs/MUSIC.md](docs/MUSIC.md).
 - The audio follows the panel's real refresh rate (60.46 Hz on the RG35XX),
   measured while the game runs, so it doesn't pop.
 - The save goes to the SD card as soon as the game saves, written atomically.
@@ -124,9 +120,7 @@ those checks:
   sharp-bilinear or PIXEL nearest; pixel perfect needs neither), LCD
   (REFLECTIVE: the GBC screen's backing showing through light pixels, with
   the shadows dark pixels cast on it), GRID (the thin lines between the
-  LCD's pixels), MUSIC (CUSTOM plays your own Ogg files in place of the
-  game's tracks, see [docs/MUSIC.md](docs/MUSIC.md)), RESUME and QUIT GAME
-  (back to MiaUI).
+  LCD's pixels), RESUME and QUIT GAME (back to MiaUI).
   D-pad and A change things, B or MENU closes; the choices are kept in
   `Saves/LinksAwakening/settings.cfg`.
 
@@ -161,19 +155,6 @@ inside the area the game saves, so the setting belongs to each save file.
   uneven. The idea comes from mattakins'
   [Pixel Transparency](https://github.com/mattakins/Pixel_Transparency)
   shader; the code is our own.
-- **Custom music** (`handheld/la_music.c`). The port watches the game's
-  current track (`wActiveMusicIndex`, `$D369`). When `music/<track>.ogg`
-  exists, it is decoded with stb_vorbis and mixed into the APU's output,
-  resampled to 44.1 kHz and scaled by the game's master volume, so the
-  game's fades apply to it too. The Game Boy music is silenced channel by
-  channel, except the channels a sound effect is using right now (`$D361`,
-  `$D371`, `$D379` hold the jingle, wave and noise effect playing). Loop
-  points come from the file's `LOOPSTART` / `LOOPLENGTH` (or `LOOPEND`)
-  comments. Sound effects are caught in the driver's PlaySfx (bank `$1F`,
-  `$4006`), where this frame's requests (`$D360`, `$D370`, `$D378`) are still
-  set; `music/sfx/<j|w|n>_<id>.ogg` is decoded once, kept in memory and
-  mixed in, and the Game Boy effect's channel is silenced while it would
-  have played.
 - **Audio.** The game is paced by the panel's vsync, at 60.46 Hz on the
   RG35XX, while the Game Boy runs at 59.73 Hz. So the game makes about 1.2%
   more sound than the audio device plays, and samples used to be dropped,
@@ -208,12 +189,6 @@ in MiaUI under Ports.
 
 Saves and a log of the last run are in `Saves/LinksAwakening/` on the card.
 
-For custom music, copy your `.ogg` files to
-`Ports/Links Awakening DX.pak/music/` on the card and pick MUSIC: CUSTOM on
-the options screen. File names, the track table and a script that builds the
-whole pack from your own copy of the Switch version's audio and the original
-soundtrack are in [docs/MUSIC.md](docs/MUSIC.md).
-
 ## Adding a console
 
 Everything above, except packaging, lives in a shared handheld layer:
@@ -231,11 +206,11 @@ PortMaster and others are welcome.
 ```
 .
 ├── build-miaui.sh    one command: ROM -> MiaUI package
-├── handheld/         shared layer: controls, status bar, dialogs, screen, options, LCD look, music
+├── handheld/         shared layer: controls, status bar, dialogs, screen, options, LCD look
 ├── miaui/            MiaUI launcher
 ├── scripts/          handheld.sh (shared build), build_miaui.sh, recomp.sh, upstream targets
 ├── docker/           toolchain images
-├── docs/             HANDHELD.md, MUSIC.md (track table), and upstream's building and porting notes
+├── docs/             HANDHELD.md and upstream's building and porting notes
 └── LinksAwakening/   submodule: entry point, gen/ (your ROM's code), gbrecomp/ (runtime)
 ```
 
@@ -248,7 +223,6 @@ PortMaster and others are welcome.
   [hitaloose/gb-recompiled](https://github.com/hitaloose/gb-recompiled)
 - Game knowledge: the [LADX-Disassembly](https://github.com/zladx/LADX-Disassembly) contributors
 - [SDL2](https://github.com/libsdl-org/SDL), and the MiaUI / MinUI projects
-- [stb_vorbis](https://github.com/nothings/stb) by Sean Barrett (public domain / MIT), for the custom music
 - The reflective LCD idea: mattakins' [Pixel Transparency](https://github.com/mattakins/Pixel_Transparency)
 
 ## License
